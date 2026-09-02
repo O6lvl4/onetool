@@ -90,6 +90,7 @@ async function buildOptions(args: Args): Promise<OneToolOptions> {
     const document = (await loadJson(args.openapi)) as OpenApiDocument;
     const provider = new OpenApiProvider({
       document,
+      ...(/^https?:\/\//.test(args.openapi) ? { documentUrl: args.openapi } : {}),
       ...(args.baseUrl ? { baseUrl: args.baseUrl } : {}),
       ...(args.namespace ? { namespace: args.namespace } : {}),
       ...(Object.keys(args.headers).length ? { headers: args.headers } : {}),

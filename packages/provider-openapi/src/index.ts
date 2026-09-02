@@ -76,6 +76,8 @@ export interface OpenApiProviderOptions {
   summary?: string;
   /** Defaults to `servers[0].url`. Required when the document has no servers. */
   baseUrl?: string;
+  /** Where the document was fetched from. A relative `servers[].url` (allowed by OpenAPI) is resolved against it. */
+  documentUrl?: string;
   /** Static headers (for example `Authorization`) or a function producing them per call. */
   headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
   fetch?: typeof fetch;
@@ -112,9 +114,7 @@ export class OpenApiProvider implements Provider {
   constructor(private readonly options: OpenApiProviderOptions) {
     const doc = options.document;
     this.namespace = options.namespace ?? slug(doc.info?.title ?? "api");
-    const base = options.baseUrl ?? doc.servers?.[0]?.url;
-    if (!base) throw new Error("OpenApiProvider: baseUrl is required because the document declares no servers");
-    this.baseUrl = base.replace(/\/+$/, "");
+    this.baseUrl = resolveBaseUrl(options.baseUrl ?? doc.servers?.[0]?.url, options.documentUrl).replace(/\/+$/, "");
     this.headers = options.headers;
     this.fetchFn = options.fetch ?? fetch;
     this.ops = this.compile(doc);
@@ -331,6 +331,16 @@ async function parseBody(response: Response): Promise<unknown> {
 
 function stringify(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/** OpenAPI allows `servers[].url` to be relative to the document's own URL. Resolve it, or explain what is missing. */
+function resolveBaseUrl(server: string | undefined, documentUrl: string | undefined): string {
+  if (!server) throw new Error("OpenApiProvider: baseUrl is required because the document declares no servers");
+  if (/^[a-z][a-z0-9+.-]*:/i.test(server)) return server;
+  if (!documentUrl) {
+    throw new Error(`OpenApiProvider: servers[0].url "${server}" is relative; pass documentUrl (where the document lives) or baseUrl`);
+  }
+  return new URL(server, documentUrl).toString();
 }
 
 function slug(text: string): string {

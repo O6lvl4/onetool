@@ -62,6 +62,14 @@ describe("OpenApiProvider catalog", () => {
     expect(names).toEqual(["createPet", "deletePet", "getPet", "get_health", "listPets", "searchPets"]);
   });
 
+  it("resolves a relative servers[].url against the document URL, and refuses to guess", async () => {
+    const document = { info: { title: "Rel" }, servers: [{ url: "/api/v3" }], paths: {} } as OpenApiDocument;
+    const p = new OpenApiProvider({ document, documentUrl: "https://petstore.example/spec/openapi.json" });
+    expect((p as unknown as { baseUrl: string }).baseUrl).toBe("https://petstore.example/api/v3");
+    expect(() => new OpenApiProvider({ document })).toThrow(/relative/);
+    expect(() => new OpenApiProvider({ document: { paths: {} } })).toThrow(/declares no servers/);
+  });
+
   it("classifies by HTTP method unless x-onetool-kind says otherwise", async () => {
     const ops = await (await provider()).operations("pet-store");
     const kind = (name: string) => ops.find((o) => o.name === name)?.kind;
