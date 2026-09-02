@@ -93,6 +93,19 @@ describe("OpenApiProvider catalog", () => {
     expect(get?.inputSchema["required"]).toEqual(["petId"]);
     expect(get?.description).toBe("GET /pets/{petId} — Get a pet");
   });
+
+  it("derives the output schema from the first successful JSON response, as the { status, body } envelope", async () => {
+    const p = await provider();
+    const list = await p.operation({ namespace: "pet-store", name: "listPets" });
+    expect(list?.outputSchema).toMatchObject({
+      type: "object",
+      required: ["status", "body"],
+      properties: { status: { type: "integer" }, body: { type: "array", description: "Pets", items: { type: "object", properties: { id: { type: "integer" } } } } },
+    });
+    const del = await p.operation({ namespace: "pet-store", name: "deletePet" });
+    expect(del?.outputSchema).toMatchObject({ properties: { body: { description: "Deleted" } } });
+    expect((del?.outputSchema?.["properties"] as Record<string, Record<string, unknown>>)["body"]?.["type"]).toBeUndefined();
+  });
 });
 
 describe("OpenApiProvider execution", () => {

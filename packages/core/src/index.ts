@@ -1,6 +1,6 @@
 export { OneTool, type OneToolOptions, type DescribeResult, type ListedOperation } from "./onetool.js";
 export { ResolveError } from "./resolve.js";
-export { buildToolSpecs, dispatchTool } from "./tools.js";
+export { buildToolSpecs, dispatchTool, toStructured } from "./tools.js";
 export { Policy, normalizeName, type PolicyConfig, type Decision } from "./policy.js";
 export { classify, kindFromName, words } from "./classify.js";
 export { validate, cleanText, isPlainObject } from "./schema.js";

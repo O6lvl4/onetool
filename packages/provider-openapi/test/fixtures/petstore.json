@@ -12,7 +12,10 @@
           { "name": "limit", "in": "query", "description": "How many", "schema": { "type": "integer" } },
           { "name": "tag", "in": "query", "schema": { "type": "array", "items": { "type": "string" } } },
           { "$ref": "#/components/parameters/Trace" }
-        ]
+        ],
+        "responses": {
+          "200": { "description": "Pets", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } } } } }
+        }
       },
       "post": {
         "operationId": "createPet",
@@ -24,7 +27,7 @@
     "/pets/{petId}": {
       "parameters": [{ "name": "petId", "in": "path", "required": true, "schema": { "type": "integer" } }],
       "get": { "operationId": "getPet", "summary": "Get a pet" },
-      "delete": { "operationId": "deletePet", "summary": "Delete a pet" }
+      "delete": { "operationId": "deletePet", "summary": "Delete a pet", "responses": { "204": { "description": "Deleted" } } }
     },
     "/pets/search": {
       "post": { "operationId": "searchPets", "summary": "Search (POST, but read-only)", "x-onetool-kind": "read" }

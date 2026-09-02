@@ -10,6 +10,7 @@ export interface OpenApiDocument {
     schemas?: Record<string, JsonSchema>;
     parameters?: Record<string, Parameter>;
     requestBodies?: Record<string, RequestBody>;
+    responses?: Record<string, ResponseObject>;
   };
 }
 
@@ -28,7 +29,13 @@ export interface Operation {
   deprecated?: boolean;
   parameters?: (Parameter | Ref)[];
   requestBody?: RequestBody | Ref;
+  responses?: Record<string, ResponseObject | Ref>;
   "x-onetool-kind"?: Kind;
+}
+
+export interface ResponseObject {
+  description?: string;
+  content?: Record<string, { schema?: JsonSchema }>;
 }
 
 export type ParameterLocation = "path" | "query" | "header" | "cookie";

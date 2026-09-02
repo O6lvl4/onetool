@@ -145,6 +145,7 @@ describe("OneTool tool surface", () => {
     const tool = new OneTool({ providers: [petstore()], prefix: "shop" });
     expect(tool.toolSpecs().map((t) => t.name)).toEqual(["shop_services", "shop_operations", "shop_describe", "shop_call"]);
     expect(tool.toolSpecs()[3]?.annotations).toEqual({ readOnly: false, destructive: true, idempotent: false, openWorld: true });
+    expect(tool.toolSpecs().map((t) => t.outputSchema !== undefined)).toEqual([true, true, true, false]);
     expect(await tool.handleTool("shop_services", {})).toMatchObject({ isError: false, content: { json: [{ name: "petstore" }] } });
     expect(await tool.handleTool("shop_describe", { operation: "getPet" })).toMatchObject({ isError: false, content: { json: { name: "getPet", kind: "read", verdict: "allow" } } });
     expect(await tool.handleTool("shop_call", { operation: "listPets" })).toMatchObject({ isError: false, content: { json: [{ id: 1, name: "Rex" }] } });

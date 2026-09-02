@@ -32,7 +32,7 @@ The four tools, with the default `api` prefix:
 
 - `api_services` lists namespaces.
 - `api_operations` lists the operations of a namespace with a summary, a kind (`read`, `write`, `sensitive`) and the policy verdict (`allow`, `confirm`, `deny`).
-- `api_describe` returns one operation's description and input JSON Schema.
+- `api_describe` returns one operation's description, its input JSON Schema and, when the provider knows it, its output schema.
 - `api_call` runs one operation. Reads run directly. Writes and sensitive operations go through the policy, which may ask the user or refuse. Invalid input gets the schema back instead of a result.
 
 ## Quick start
@@ -78,7 +78,7 @@ node packages/mcp/dist/cli.js --openapi https://petstore3.swagger.io/api/v3/open
 node packages/mcp/dist/cli.js --openapi ./api.json --base-url https://api.example.com --header "Authorization: Bearer ..." --strict --policy ./policy.json
 ```
 
-`OpenApiProvider` flattens path, query, header and cookie parameters plus the request body into one input object, so the model never needs to know where a parameter travels. Local `$ref`s are inlined and cycles are cut. GET and HEAD are `read`, everything else is `write`; `x-onetool-kind` on an operation overrides that. HTTP 400 and 422 are treated as invalid input and come back with the schema attached. YAML documents and remote `$ref`s are not supported.
+`OpenApiProvider` flattens path, query, header and cookie parameters plus the request body into one input object, so the model never needs to know where a parameter travels. Local `$ref`s are inlined and cycles are cut. The output schema is the `{ status, body }` envelope the provider returns, with `body` taken from the first successful JSON response. GET and HEAD are `read`, everything else is `write`; `x-onetool-kind` on an operation overrides that. HTTP 400 and 422 are treated as invalid input and come back with the schema attached. YAML documents and remote `$ref`s are not supported.
 
 ## Policy
 
@@ -137,7 +137,7 @@ Throw `InputValidationError` when the remote side rejected the input and onetool
 | `@o6lvl4/onetool-provider-openapi` | `OpenApiProvider` | core |
 | `@o6lvl4/onetool-mcp` | `createOneToolServer` (low-level `Server` plus elicitation) and the `onetool-mcp` CLI | core, provider-openapi, MCP SDK |
 
-`ToolSpec` has the shape that Bedrock Converse, the Anthropic API and OpenAI function calling all share, so an adapter for any of them registers `toolSpecs()` and forwards calls to `handleTool()`.
+`ToolSpec` has the shape that Bedrock Converse, the Anthropic API and OpenAI function calling all share, so an adapter for any of them registers `toolSpecs()` and forwards calls to `handleTool()`. The three catalog tools declare an `outputSchema`; the MCP adapter returns every successful result as `structuredContent` as well as text (plain objects as they are, anything else wrapped as `{ result }`), and the MCP client validates it against the declared schema.
 
 ## Development
 

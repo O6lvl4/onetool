@@ -125,6 +125,8 @@ export interface ToolSpec {
   name: string;
   description: string;
   inputSchema: JsonSchema;
+  /** Shape of the structured result, when it is stable. The generic `call` tool has none: its shape is the operation's. */
+  outputSchema?: JsonSchema;
   annotations: ToolAnnotations;
 }
 

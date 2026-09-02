@@ -55,6 +55,21 @@ describe("onetool MCP server", () => {
     expect(tools.map((t) => t.name)).toEqual(["api_services", "api_operations", "api_describe", "api_call"]);
     expect(tools[3]?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
     expect(tools[2]?.inputSchema).toMatchObject({ type: "object", required: ["operation"] });
+    expect(tools[2]?.outputSchema).toMatchObject({ type: "object", required: expect.arrayContaining(["inputSchema", "verdict"]) });
+    expect(tools[3]?.outputSchema).toBeUndefined();
+  });
+
+  it("returns structured content that the client validates against the declared output schema", async () => {
+    const { onetool } = fixture();
+    const { client } = await connect(onetool);
+    await client.listTools(); // caches output schemas so callTool validates structuredContent
+    const services = await client.callTool({ name: "api_services", arguments: {} });
+    expect(services.structuredContent).toEqual({ result: [{ name: "petstore", summary: "2 operations" }] });
+    const described = await client.callTool({ name: "api_describe", arguments: { operation: "listPets" } });
+    expect(described.structuredContent).toMatchObject({ name: "listPets", verdict: "allow", inputSchema: { type: "object" } });
+    const called = await client.callTool({ name: "api_call", arguments: { operation: "listPets" } });
+    expect(called.structuredContent).toEqual({ result: [{ id: 1 }] });
+    expect(JSON.parse(text(called))).toEqual([{ id: 1 }]);
   });
 
   it("runs reads directly and returns describe output", async () => {

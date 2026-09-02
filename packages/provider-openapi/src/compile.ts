@@ -62,8 +62,25 @@ function compileOperation(site: Site): CompiledOperation {
     kind: kindOf(op, method),
     ...(op.tags?.length ? { tags: op.tags } : {}),
     inputSchema: { type: "object", properties, ...(required.length ? { required } : {}), additionalProperties: false },
+    outputSchema: outputSchemaOf(doc, op),
   };
   return { spec, method, path, parameters, ...(body ? { body } : {}) };
+}
+
+/**
+ * `execute` always returns `{ status, body }`, so the output schema is that envelope with the body
+ * taken from the first successful JSON response (200, 201, then any 2xx, then `default`).
+ */
+function outputSchemaOf(doc: OpenApiDocument, op: Operation): JsonSchema {
+  const responses = op.responses ?? {};
+  const codes = Object.keys(responses);
+  const chosen = ["200", "201"].find((c) => c in responses) ?? codes.find((c) => /^2/.test(c)) ?? codes.find((c) => c === "default");
+  const response = chosen ? resolve(doc, responses[chosen] as NonNullable<Operation["responses"]>[string]) : undefined;
+  const content = response?.content ?? {};
+  const jsonType = Object.keys(content).find((t) => t.includes("json"));
+  const bodySchema = jsonType ? inlineRefs(doc, content[jsonType]?.schema ?? {}) : {};
+  const body = { ...bodySchema, ...(response?.description ? { description: cleanText(response.description, 300) } : {}) };
+  return { type: "object", properties: { status: { type: "integer", description: "HTTP status code" }, body }, required: ["status", "body"] };
 }
 
 /** `x-onetool-kind` wins; otherwise GET and HEAD read, everything else writes. */

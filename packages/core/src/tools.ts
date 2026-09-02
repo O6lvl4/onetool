@@ -1,9 +1,52 @@
 import type { OneTool } from "./onetool.js";
 import { ResolveError } from "./resolve.js";
 import { isPlainObject } from "./schema.js";
-import type { CallContext, ToolOutcome, ToolSpec } from "./types.js";
+import type { CallContext, Content, JsonSchema, ToolOutcome, ToolSpec } from "./types.js";
 
 const READ_ONLY = { readOnly: true, destructive: false, idempotent: true, openWorld: false } as const;
+
+const KIND = { type: "string", enum: ["read", "write", "sensitive"] };
+const VERDICT = { type: "string", enum: ["allow", "confirm", "deny"] };
+const NAMESPACE_INFO = {
+  type: "object",
+  properties: { name: { type: "string" }, summary: { type: "string" } },
+  required: ["name", "summary"],
+};
+const OPERATION_ROW = {
+  type: "object",
+  properties: {
+    namespace: { type: "string" },
+    name: { type: "string" },
+    summary: { type: "string" },
+    kind: KIND,
+    verdict: VERDICT,
+    tags: { type: "array", items: { type: "string" } },
+  },
+  required: ["namespace", "name", "summary", "kind", "verdict"],
+};
+const DESCRIBE_RESULT = {
+  type: "object",
+  properties: {
+    ...OPERATION_ROW.properties,
+    description: { type: "string" },
+    reason: { type: "string", description: "Why the policy reached its verdict." },
+    inputSchema: { type: "object", description: "JSON Schema of the input accepted by the call tool." },
+    outputSchema: { type: "object", description: "JSON Schema of the result, when the provider knows it." },
+  },
+  required: [...OPERATION_ROW.required, "description", "reason", "inputSchema"],
+};
+
+/** Structured results wrap non-object JSON as `{ result }`, so a list tool's schema is `{ result: [...] }`. */
+const listOf = (items: JsonSchema): JsonSchema => ({ type: "object", properties: { result: { type: "array", items } }, required: ["result"] });
+
+/**
+ * The structured (machine-readable) form of a tool outcome. A plain object is returned as is;
+ * arrays and scalars are wrapped as `{ result }` because structured content must be an object.
+ */
+export function toStructured(content: Content): Record<string, unknown> {
+  if (!("json" in content)) return { result: content.text };
+  return isPlainObject(content.json) ? content.json : { result: content.json };
+}
 
 /** The four generic tools, in the name / description / JSON Schema shape every function-calling API shares. */
 export function buildToolSpecs(prefix: string, title: string): ToolSpec[] {
@@ -15,6 +58,7 @@ export function buildToolSpecs(prefix: string, title: string): ToolSpec[] {
       name: `${prefix}_services`,
       description: `List the namespaces (services) reachable through ${title}. Use it when unsure which namespace an operation belongs to.`,
       inputSchema: { type: "object", properties: { query: query("name or summary") }, additionalProperties: false },
+      outputSchema: listOf(NAMESPACE_INFO),
       annotations: READ_ONLY,
     },
     {
@@ -22,12 +66,14 @@ export function buildToolSpecs(prefix: string, title: string): ToolSpec[] {
       description:
         "List operations of a namespace with a one-line summary, their kind (read / write / sensitive) and the policy verdict (allow / confirm / deny).",
       inputSchema: { type: "object", properties: { namespace, query: query("name, summary or tags") }, additionalProperties: false },
+      outputSchema: listOf(OPERATION_ROW),
       annotations: READ_ONLY,
     },
     {
       name: `${prefix}_describe`,
       description: `Return the full description and the JSON input schema of one operation. Call it before ${prefix}_call whenever the parameters are uncertain.`,
       inputSchema: { type: "object", properties: { namespace, operation }, required: ["operation"], additionalProperties: false },
+      outputSchema: DESCRIBE_RESULT,
       annotations: READ_ONLY,
     },
     {

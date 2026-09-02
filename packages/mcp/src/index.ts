@@ -1,6 +1,6 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
-import type { ConfirmFn, Content, OneTool, ToolSpec } from "@o6lvl4/onetool-core";
+import { toStructured, type ConfirmFn, type Content, type OneTool, type ToolSpec } from "@o6lvl4/onetool-core";
 
 export const VERSION = "0.1.0";
 
@@ -33,7 +33,8 @@ export function createOneToolServer(onetool: OneTool, options: OneToolServerOpti
       signal: extra.signal,
       meta: { client: server.getClientVersion()?.name ?? "unknown" },
     });
-    return { content: [{ type: "text", text: render(outcome.content) }], ...(outcome.isError ? { isError: true } : {}) };
+    if (outcome.isError) return { content: [{ type: "text", text: render(outcome.content) }], isError: true };
+    return { content: [{ type: "text", text: render(outcome.content) }], structuredContent: toStructured(outcome.content) };
   });
   return server;
 }
@@ -73,6 +74,7 @@ export function toMcpTool(spec: ToolSpec): Tool {
     name: spec.name,
     description: spec.description,
     inputSchema: { ...spec.inputSchema, type: "object" } as Tool["inputSchema"],
+    ...(spec.outputSchema ? { outputSchema: { ...spec.outputSchema, type: "object" } as Tool["outputSchema"] } : {}),
     annotations: {
       readOnlyHint: spec.annotations.readOnly,
       destructiveHint: spec.annotations.destructive,
