@@ -9,9 +9,11 @@
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
-    "check": "pnpm run build && pnpm run test"
+    "check": "pnpm run build && pnpm run test && pnpm run quality",
+    "quality": "codopsy-ts analyze ./packages --no-color --no-degradation"
   },
   "devDependencies": {
-    "@o6lvl4/onetool-core": "workspace:*"
+    "@o6lvl4/onetool-core": "workspace:*",
+    "codopsy-ts": "1.4.0"
   }
 }

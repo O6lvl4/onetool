@@ -8,38 +8,34 @@ let server: Server;
 let baseUrl: string;
 const seen: { method: string; url: string; headers: Record<string, string | string[] | undefined>; body: string }[] = [];
 
+type Route = (url: URL, body: string) => { status: number; type?: string; body: string };
+const routes: Record<string, Route> = {
+  "GET /v1/pets": (url) => ({
+    status: 200,
+    type: "application/json",
+    body: JSON.stringify([{ id: 1, name: "Rex", limit: url.searchParams.get("limit"), tags: url.searchParams.getAll("tag") }]),
+  }),
+  "POST /v1/pets": (_url, raw) => {
+    const parsed = JSON.parse(raw) as { name?: string };
+    if (!parsed.name) return { status: 400, type: "application/json", body: JSON.stringify({ message: "name is required" }) };
+    return { status: 201, type: "application/json", body: JSON.stringify({ id: 2, name: parsed.name }) };
+  },
+  "DELETE /v1/pets/7": () => ({ status: 204, body: "" }),
+  "GET /v1/pets/404": () => ({ status: 404, type: "text/plain", body: "no such pet" }),
+};
+
 beforeAll(async () => {
   server = createServer((req, res) => {
-    let body = "";
-    req.on("data", (chunk: Buffer) => (body += chunk.toString()));
+    let raw = "";
+    req.on("data", (chunk: Buffer) => (raw += chunk.toString()));
     req.on("end", () => {
-      seen.push({ method: req.method ?? "", url: req.url ?? "", headers: req.headers, body });
+      seen.push({ method: req.method ?? "", url: req.url ?? "", headers: req.headers, body: raw });
       const url = new URL(req.url ?? "/", "http://x");
-      if (req.method === "GET" && url.pathname === "/v1/pets") {
-        res.setHeader("content-type", "application/json");
-        res.end(JSON.stringify([{ id: 1, name: "Rex", limit: url.searchParams.get("limit"), tags: url.searchParams.getAll("tag") }]));
-      } else if (req.method === "POST" && url.pathname === "/v1/pets") {
-        const parsed = JSON.parse(body) as { name?: string };
-        if (!parsed.name) {
-          res.statusCode = 400;
-          res.setHeader("content-type", "application/json");
-          res.end(JSON.stringify({ message: "name is required" }));
-        } else {
-          res.statusCode = 201;
-          res.setHeader("content-type", "application/json");
-          res.end(JSON.stringify({ id: 2, name: parsed.name }));
-        }
-      } else if (req.method === "DELETE" && url.pathname === "/v1/pets/7") {
-        res.statusCode = 204;
-        res.end();
-      } else if (req.method === "GET" && url.pathname === "/v1/pets/404") {
-        res.statusCode = 404;
-        res.setHeader("content-type", "text/plain");
-        res.end("no such pet");
-      } else {
-        res.statusCode = 500;
-        res.end("unexpected");
-      }
+      const route = routes[`${req.method} ${url.pathname}`];
+      const out = route ? route(url, raw) : { status: 500, body: "unexpected" };
+      res.statusCode = out.status;
+      if (out.type) res.setHeader("content-type", out.type);
+      res.end(out.body);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

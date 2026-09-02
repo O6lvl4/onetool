@@ -5,20 +5,32 @@ function petstore(calls: string[] = []) {
   return new FunctionProvider(
     "petstore",
     [
-      { name: "listPets", summary: "List pets", handler: () => (calls.push("listPets"), [{ id: 1, name: "Rex" }]) },
+      { name: "listPets", summary: "List pets", handler: () => {
+          calls.push("listPets");
+          return [{ id: 1, name: "Rex" }];
+        } },
       {
         name: "getPet",
         summary: "Get one pet",
         inputSchema: { type: "object", properties: { id: { type: "integer" } }, required: ["id"], additionalProperties: false },
-        handler: ({ id }) => (calls.push("getPet"), { id, name: "Rex", apiKey: "should-not-leak" }),
+        handler: ({ id }) => {
+          calls.push("getPet");
+          return { id, name: "Rex", apiKey: "should-not-leak" };
+        },
       },
       {
         name: "createPet",
         summary: "Create a pet",
         inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"], additionalProperties: false },
-        handler: ({ name }) => (calls.push("createPet"), { id: 2, name }),
+        handler: ({ name }) => {
+          calls.push("createPet");
+          return { id: 2, name };
+        },
       },
-      { name: "deletePet", summary: "Delete a pet", handler: () => (calls.push("deletePet"), null) },
+      { name: "deletePet", summary: "Delete a pet", handler: () => {
+          calls.push("deletePet");
+          return null;
+        } },
       { name: "rejectPet", summary: "Remote validation", handler: () => { throw new InputValidationError(["name must not be empty"]); } },
       { name: "failPet", summary: "Remote failure", handler: () => { throw new OperationError("HTTP 500", { detail: "boom" }); } },
       { name: "hugePet", summary: "Large result", handler: () => ({ blob: "x".repeat(5000) }) },

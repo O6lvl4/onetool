@@ -17,47 +17,69 @@ export function cleanText(text: string | undefined, max = 2000): string {
 }
 
 /**
- * Validate a value against the practical subset of JSON Schema onetool understands.
+ * Validate a value against the practical subset of JSON Schema onetool understands:
+ * type, enum, required, properties, additionalProperties and items.
  * Returns human-readable problems; an empty array means "no objection".
  * Unknown properties are only reported when the schema says `additionalProperties: false`.
  */
 export function validate(schema: JsonSchema | undefined, value: unknown, path = "input"): string[] {
   if (!schema) return [];
-  const problems: string[] = [];
-  const declared = schema["type"];
-  const types = Array.isArray(declared) ? (declared as string[]) : typeof declared === "string" ? [declared] : [];
-  if (types.length > 0 && !types.some((t) => matchesType(t, value))) {
-    return [`${path}: expected ${types.join(" | ")}, got ${describeValue(value)}`];
-  }
+  const wrongType = checkType(schema, value, path);
+  if (wrongType) return [wrongType];
+  return [...checkEnum(schema, value, path), ...checkObject(schema, value, path), ...checkArray(schema, value, path)];
+}
+
+function declaredTypes(schema: JsonSchema): string[] {
+  const type = schema["type"];
+  if (Array.isArray(type)) return type as string[];
+  if (typeof type === "string") return [type];
+  return [];
+}
+
+function checkType(schema: JsonSchema, value: unknown, path: string): string | undefined {
+  const types = declaredTypes(schema);
+  if (types.length === 0 || types.some((t) => matchesType(t, value))) return undefined;
+  return `${path}: expected ${types.join(" | ")}, got ${describeValue(value)}`;
+}
+
+function checkEnum(schema: JsonSchema, value: unknown, path: string): string[] {
   const allowed = schema["enum"];
-  if (Array.isArray(allowed) && !allowed.some((candidate) => sameJson(candidate, value))) {
-    problems.push(`${path}: must be one of ${JSON.stringify(allowed)}`);
+  if (!Array.isArray(allowed) || allowed.some((candidate) => sameJson(candidate, value))) return [];
+  return [`${path}: must be one of ${JSON.stringify(allowed)}`];
+}
+
+function checkObject(schema: JsonSchema, value: unknown, path: string): string[] {
+  if (!isPlainObject(value)) return [];
+  const props = (schema["properties"] ?? {}) as Record<string, JsonSchema>;
+  const required = (schema["required"] as string[] | undefined) ?? [];
+  const missing = required.filter((name) => value[name] === undefined).map((name) => `${path}: missing required property "${name}"`);
+  const scope: ObjectScope = { props, additional: schema["additionalProperties"], path };
+  const members = Object.entries(value)
+    .filter(([, member]) => member !== undefined)
+    .flatMap(([name, member]) => checkMember(scope, name, member));
+  return [...missing, ...members];
+}
+
+interface ObjectScope {
+  props: Record<string, JsonSchema>;
+  additional: unknown;
+  path: string;
+}
+
+function checkMember({ props, additional, path }: ObjectScope, name: string, member: unknown): string[] {
+  const sub = props[name];
+  if (sub) return validate(sub, member, `${path}.${name}`);
+  if (additional === false) {
+    const valid = Object.keys(props);
+    return [`${path}: unknown property "${name}"${valid.length ? ` (valid: ${valid.join(", ")})` : ""}`];
   }
-  if (isPlainObject(value)) {
-    const props = (schema["properties"] ?? {}) as Record<string, JsonSchema>;
-    const required = (schema["required"] as string[] | undefined) ?? [];
-    for (const name of required) {
-      if (value[name] === undefined) problems.push(`${path}: missing required property "${name}"`);
-    }
-    const additional = schema["additionalProperties"];
-    for (const [name, member] of Object.entries(value)) {
-      if (member === undefined) continue;
-      const sub = props[name];
-      if (sub) {
-        problems.push(...validate(sub, member, `${path}.${name}`));
-      } else if (additional === false) {
-        const valid = Object.keys(props);
-        problems.push(`${path}: unknown property "${name}"${valid.length ? ` (valid: ${valid.join(", ")})` : ""}`);
-      } else if (isPlainObject(additional)) {
-        problems.push(...validate(additional, member, `${path}.${name}`));
-      }
-    }
-  }
+  return isPlainObject(additional) ? validate(additional, member, `${path}.${name}`) : [];
+}
+
+function checkArray(schema: JsonSchema, value: unknown, path: string): string[] {
   const items = schema["items"];
-  if (Array.isArray(value) && isPlainObject(items)) {
-    value.forEach((item, i) => problems.push(...validate(items, item, `${path}[${i}]`)));
-  }
-  return problems;
+  if (!Array.isArray(value) || !isPlainObject(items)) return [];
+  return value.flatMap((item, i) => validate(items, item, `${path}[${i}]`));
 }
 
 function matchesType(type: string, value: unknown): boolean {

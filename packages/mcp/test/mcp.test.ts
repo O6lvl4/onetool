@@ -8,12 +8,22 @@ import { createOneToolServer } from "../src/index.js";
 function fixture() {
   const calls: string[] = [];
   const provider = new FunctionProvider("petstore", [
-    { name: "listPets", summary: "List pets", handler: () => (calls.push("listPets"), [{ id: 1 }]) },
+    {
+      name: "listPets",
+      summary: "List pets",
+      handler: () => {
+        calls.push("listPets");
+        return [{ id: 1 }];
+      },
+    },
     {
       name: "createPet",
       summary: "Create a pet",
       inputSchema: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
-      handler: ({ name }) => (calls.push("createPet"), { id: 2, name }),
+      handler: ({ name }) => {
+        calls.push("createPet");
+        return { id: 2, name };
+      },
     },
   ]);
   return { calls, onetool: new OneTool({ providers: [provider], title: "the pet store" }) };

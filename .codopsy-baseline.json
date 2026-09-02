@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "timestamp": "2026-09-02T09:07:27.211Z",
+  "overall": {
+    "totalIssues": 0,
+    "totalErrors": 0,
+    "totalWarnings": 0,
+    "averageComplexity": 2.2,
+    "score": 100,
+    "grade": "A"
+  },
+  "files": [
+    {
+      "file": "core/src/classify.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 6,
+      "maxCognitive": 4,
+      "score": 100
+    },
+    {
+      "file": "core/src/index.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 0,
+      "maxCognitive": 0,
+      "score": 100
+    },
+    {
+      "file": "core/src/onetool.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 8,
+      "maxCognitive": 7,
+      "score": 100
+    },
+    {
+      "file": "core/src/policy.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 7,
+      "maxCognitive": 6,
+      "score": 100
+    },
+    {
+      "file": "core/src/providers/function.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 7,
+      "maxCognitive": 5,
+      "score": 100
+    },
+    {
+      "file": "core/src/resolve.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 5,
+      "maxCognitive": 6,
+      "score": 100
+    },
+    {
+      "file": "core/src/response.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 5,
+      "maxCognitive": 11,
+      "score": 100
+    },
+    {
+      "file": "core/src/schema.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 9,
+      "maxCognitive": 5,
+      "score": 100
+    },
+    {
+      "file": "core/src/tools.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 7,
+      "maxCognitive": 8,
+      "score": 100
+    },
+    {
+      "file": "core/src/types.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 2,
+      "maxCognitive": 1,
+      "score": 100
+    },
+    {
+      "file": "core/test/classify.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 1,
+      "maxCognitive": 0,
+      "score": 100
+    },
+    {
+      "file": "core/test/onetool.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 3,
+      "maxCognitive": 2,
+      "score": 100
+    },
+    {
+      "file": "core/test/policy.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 1,
+      "maxCognitive": 0,
+      "score": 100
+    },
+    {
+      "file": "core/test/response.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 3,
+      "maxCognitive": 2,
+      "score": 100
+    },
+    {
+      "file": "core/test/schema.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 1,
+      "maxCognitive": 0,
+      "score": 100
+    },
+    {
+      "file": "mcp/src/cli.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 6,
+      "maxCognitive": 9,
+      "score": 100
+    },
+    {
+      "file": "mcp/src/index.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 5,
+      "maxCognitive": 9,
+      "score": 100
+    },
+    {
+      "file": "mcp/test/cli.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 2,
+      "maxCognitive": 1,
+      "score": 100
+    },
+    {
+      "file": "mcp/test/mcp.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 3,
+      "maxCognitive": 2,
+      "score": 100
+    },
+    {
+      "file": "provider-openapi/src/compile.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 9,
+      "maxCognitive": 12,
+      "score": 100
+    },
+    {
+      "file": "provider-openapi/src/index.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 9,
+      "maxCognitive": 5,
+      "score": 100
+    },
+    {
+      "file": "provider-openapi/src/refs.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 7,
+      "maxCognitive": 6,
+      "score": 100
+    },
+    {
+      "file": "provider-openapi/src/request.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 9,
+      "maxCognitive": 9,
+      "score": 100
+    },
+    {
+      "file": "provider-openapi/src/types.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 0,
+      "maxCognitive": 0,
+      "score": 100
+    },
+    {
+      "file": "provider-openapi/test/openapi.test.ts",
+      "issueCount": 0,
+      "errorCount": 0,
+      "warningCount": 0,
+      "maxCyclomatic": 6,
+      "maxCognitive": 9,
+      "score": 100
+    }
+  ]
+}

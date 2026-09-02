@@ -24,8 +24,7 @@ export function createOneToolServer(onetool: OneTool, options: OneToolServerOpti
     { capabilities: { tools: {} }, ...(options.instructions ? { instructions: options.instructions } : {}) },
   );
   const specs = onetool.toolSpecs();
-  const confirm: ConfirmFn | undefined =
-    options.confirm === "none" ? undefined : typeof options.confirm === "function" ? options.confirm : elicitationConfirm(server);
+  const confirm = selectConfirm(options.confirm, server);
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: specs.map(toMcpTool) }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
@@ -37,6 +36,12 @@ export function createOneToolServer(onetool: OneTool, options: OneToolServerOpti
     return { content: [{ type: "text", text: render(outcome.content) }], ...(outcome.isError ? { isError: true } : {}) };
   });
   return server;
+}
+
+function selectConfirm(choice: OneToolServerOptions["confirm"], server: Server): ConfirmFn | undefined {
+  if (choice === "none") return undefined;
+  if (typeof choice === "function") return choice;
+  return elicitationConfirm(server);
 }
 
 /** Consent through MCP elicitation: the client (host application) decides how the human is asked. */
@@ -64,11 +69,10 @@ export function elicitationConfirm(server: Server): ConfirmFn {
 }
 
 export function toMcpTool(spec: ToolSpec): Tool {
-  const { type: _type, ...rest } = spec.inputSchema;
   return {
     name: spec.name,
     description: spec.description,
-    inputSchema: { type: "object", ...rest } as Tool["inputSchema"],
+    inputSchema: { ...spec.inputSchema, type: "object" } as Tool["inputSchema"],
     annotations: {
       readOnlyHint: spec.annotations.readOnly,
       destructiveHint: spec.annotations.destructive,

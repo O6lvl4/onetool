@@ -17,12 +17,14 @@ export interface FunctionOperation<I extends Record<string, unknown> = Record<st
  */
 export class FunctionProvider implements Provider {
   private readonly ops = new Map<string, FunctionOperation>();
+  private readonly summary: string;
 
   constructor(
     readonly namespace: string,
     operations: FunctionOperation[],
-    private readonly summary = `${operations.length} operations`,
+    summary?: string,
   ) {
+    this.summary = summary ?? `${operations.length} operations`;
     for (const op of operations) {
       if (this.ops.has(op.name)) throw new Error(`operation "${op.name}" is defined twice in namespace "${namespace}"`);
       this.ops.set(op.name, op);

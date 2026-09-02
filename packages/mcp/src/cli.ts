@@ -23,7 +23,8 @@ Options (both modes):
   --prefix <name>        tool name prefix (default "api")
   --name <name>          MCP server name
 
-The server speaks MCP over stdio; logs go to stderr.`;
+The server speaks MCP over stdio; logs go to stderr.
+`;
 
 interface Args {
   config?: string;
@@ -35,36 +36,48 @@ interface Args {
   strict: boolean;
   prefix?: string;
   name?: string;
+  help: boolean;
 }
 
-function parseArgs(argv: string[]): Args {
-  const args: Args = { headers: {}, strict: false };
+type Setter = (args: Args, value: string) => void;
+
+/** Options that take a value. Flags without a value are handled separately. */
+const VALUED: Record<string, Setter> = {
+  "--openapi": (a, v) => (a.openapi = v),
+  "--base-url": (a, v) => (a.baseUrl = v),
+  "--namespace": (a, v) => (a.namespace = v),
+  "--policy": (a, v) => (a.policy = v),
+  "--prefix": (a, v) => (a.prefix = v),
+  "--name": (a, v) => (a.name = v),
+  "--header": (a, v) => {
+    const colon = v.indexOf(":");
+    if (colon < 0) throw new Error(`--header expects "Name: value", got "${v}"`);
+    a.headers[v.slice(0, colon).trim()] = v.slice(colon + 1).trim();
+  },
+};
+
+const FLAGS: Record<string, (args: Args) => void> = {
+  "--strict": (a) => (a.strict = true),
+  "--help": (a) => (a.help = true),
+  "-h": (a) => (a.help = true),
+};
+
+export function parseArgs(argv: readonly string[]): Args {
+  const args: Args = { headers: {}, strict: false, help: false };
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i] as string;
-    const next = (): string => {
-      const v = argv[++i];
-      if (v === undefined) throw new Error(`${a} needs a value`);
-      return v;
-    };
-    switch (a) {
-      case "--openapi": args.openapi = next(); break;
-      case "--base-url": args.baseUrl = next(); break;
-      case "--header": {
-        const raw = next();
-        const colon = raw.indexOf(":");
-        if (colon < 0) throw new Error(`--header expects "Name: value", got "${raw}"`);
-        args.headers[raw.slice(0, colon).trim()] = raw.slice(colon + 1).trim();
-        break;
-      }
-      case "--namespace": args.namespace = next(); break;
-      case "--policy": args.policy = next(); break;
-      case "--strict": args.strict = true; break;
-      case "--prefix": args.prefix = next(); break;
-      case "--name": args.name = next(); break;
-      case "-h": case "--help": console.log(USAGE); process.exit(0);
-      default:
-        if (a.startsWith("-")) throw new Error(`unknown option ${a}`);
-        args.config = a;
+    const token = argv[i] as string;
+    const flag = FLAGS[token];
+    const setter = VALUED[token];
+    if (flag) {
+      flag(args);
+    } else if (setter) {
+      const value = argv[++i];
+      if (value === undefined) throw new Error(`${token} needs a value`);
+      setter(args, value);
+    } else if (token.startsWith("-")) {
+      throw new Error(`unknown option ${token}`);
+    } else {
+      args.config = token;
     }
   }
   return args;
@@ -84,45 +97,53 @@ async function loadJson(target: string): Promise<unknown> {
   }
 }
 
-async function buildOptions(args: Args): Promise<OneToolOptions> {
-  let options: OneToolOptions;
-  if (args.openapi) {
-    const document = (await loadJson(args.openapi)) as OpenApiDocument;
-    const provider = new OpenApiProvider({
-      document,
-      ...(/^https?:\/\//.test(args.openapi) ? { documentUrl: args.openapi } : {}),
-      ...(args.baseUrl ? { baseUrl: args.baseUrl } : {}),
-      ...(args.namespace ? { namespace: args.namespace } : {}),
-      ...(Object.keys(args.headers).length ? { headers: args.headers } : {}),
-    });
-    options = { providers: [provider], title: document.info?.title ?? "the API" };
-  } else if (args.config) {
-    const mod = (await import(pathToFileURL(resolve(args.config)).href)) as { default?: unknown };
-    const loaded = typeof mod.default === "function" ? await (mod.default as () => unknown)() : mod.default;
-    if (!loaded || typeof loaded !== "object" || !Array.isArray((loaded as OneToolOptions).providers)) {
-      throw new Error(`${args.config}: default export must be OneToolOptions with a "providers" array`);
-    }
-    options = loaded as OneToolOptions;
-  } else {
-    throw new Error("give a config module or --openapi\n\n" + USAGE);
+async function optionsFromOpenApi(args: Args, source: string): Promise<OneToolOptions> {
+  const document = (await loadJson(source)) as OpenApiDocument;
+  const provider = new OpenApiProvider({
+    document,
+    ...(/^https?:\/\//.test(source) ? { documentUrl: source } : {}),
+    ...(args.baseUrl ? { baseUrl: args.baseUrl } : {}),
+    ...(args.namespace ? { namespace: args.namespace } : {}),
+    ...(Object.keys(args.headers).length ? { headers: args.headers } : {}),
+  });
+  return { providers: [provider], title: document.info?.title ?? "the API" };
+}
+
+async function optionsFromConfig(path: string): Promise<OneToolOptions> {
+  const mod = (await import(pathToFileURL(resolve(path)).href)) as { default?: unknown };
+  const loaded = typeof mod.default === "function" ? await (mod.default as () => unknown)() : mod.default;
+  if (!loaded || typeof loaded !== "object" || !Array.isArray((loaded as OneToolOptions).providers)) {
+    throw new Error(`${path}: default export must be OneToolOptions with a "providers" array`);
   }
-  if (args.policy) options.policy = (await loadJson(args.policy)) as PolicyConfig;
-  if (args.strict) options.policy = { ...(options.policy ?? {}), mode: "strict" };
-  if (args.prefix) options.prefix = args.prefix;
-  return options;
+  return loaded as OneToolOptions;
+}
+
+async function applyOverrides(options: OneToolOptions, args: Args): Promise<OneToolOptions> {
+  const policy: PolicyConfig | undefined = args.policy ? ((await loadJson(args.policy)) as PolicyConfig) : options.policy;
+  const withMode = args.strict ? { ...(policy ?? {}), mode: "strict" as const } : policy;
+  return { ...options, ...(withMode ? { policy: withMode } : {}), ...(args.prefix ? { prefix: args.prefix } : {}) };
+}
+
+export async function buildOptions(args: Args): Promise<OneToolOptions> {
+  if (args.openapi) return applyOverrides(await optionsFromOpenApi(args, args.openapi), args);
+  if (args.config) return applyOverrides(await optionsFromConfig(args.config), args);
+  throw new Error(`give a config module or --openapi\n\n${USAGE}`);
 }
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const options = await buildOptions(args);
-  const onetool = new OneTool(options);
+  if (args.help) {
+    process.stdout.write(USAGE);
+    return;
+  }
+  const onetool = new OneTool(await buildOptions(args));
   const server = createOneToolServer(onetool, { ...(args.name ? { name: args.name } : {}) });
   await server.connect(new StdioServerTransport());
   const names = (await onetool.services()).map((n) => n.name).join(", ");
-  console.error(`onetool-mcp: serving ${onetool.toolSpecs().map((t) => t.name).join(", ")} for namespace(s) ${names}`);
+  process.stderr.write(`onetool-mcp: serving ${onetool.toolSpecs().map((t) => t.name).join(", ")} for namespace(s) ${names}\n`);
 }
 
 main().catch((error: unknown) => {
-  console.error(`onetool-mcp: ${error instanceof Error ? error.message : String(error)}`);
+  process.stderr.write(`onetool-mcp: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);
 });

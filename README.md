@@ -143,7 +143,9 @@ Throw `InputValidationError` when the remote side rejected the input and onetool
 
 ```sh
 pnpm install
-pnpm run check   # build, then test: core 30, openapi 8, mcp 6
+pnpm run check   # build, test (core 30, openapi 8, mcp 6), then the quality gate
 ```
+
+`pnpm run quality` runs [codopsy](https://github.com/O6lvl4/codopsy) over `packages/` and fails when the score drops below the committed `.codopsy-baseline.json`. The current score is A (100/100) with no open findings; keep it there.
 
 Not on npm yet. MIT license.
