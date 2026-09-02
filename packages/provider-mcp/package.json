@@ -21,7 +21,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0"
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@o6lvl4/onetool-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
