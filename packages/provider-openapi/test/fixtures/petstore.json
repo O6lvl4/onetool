@@ -1,0 +1,49 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Pet Store", "version": "1.0.0", "description": "<p>A <b>tiny</b> pet store.</p>" },
+  "servers": [{ "url": "http://example.invalid/v1" }],
+  "paths": {
+    "/pets": {
+      "get": {
+        "operationId": "listPets",
+        "summary": "List pets",
+        "tags": ["pets"],
+        "parameters": [
+          { "name": "limit", "in": "query", "description": "How many", "schema": { "type": "integer" } },
+          { "name": "tag", "in": "query", "schema": { "type": "array", "items": { "type": "string" } } },
+          { "$ref": "#/components/parameters/Trace" }
+        ]
+      },
+      "post": {
+        "operationId": "createPet",
+        "summary": "Create a pet",
+        "tags": ["pets"],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NewPet" } } } }
+      }
+    },
+    "/pets/{petId}": {
+      "parameters": [{ "name": "petId", "in": "path", "required": true, "schema": { "type": "integer" } }],
+      "get": { "operationId": "getPet", "summary": "Get a pet" },
+      "delete": { "operationId": "deletePet", "summary": "Delete a pet" }
+    },
+    "/pets/search": {
+      "post": { "operationId": "searchPets", "summary": "Search (POST, but read-only)", "x-onetool-kind": "read" }
+    },
+    "/legacy": { "get": { "operationId": "legacy", "deprecated": true } },
+    "/health": { "get": { "summary": "no operationId" } }
+  },
+  "components": {
+    "parameters": { "Trace": { "name": "X-Trace", "in": "header", "schema": { "type": "string" } } },
+    "schemas": {
+      "NewPet": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string" }, "parent": { "$ref": "#/components/schemas/Pet" } }
+      },
+      "Pet": {
+        "type": "object",
+        "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "parent": { "$ref": "#/components/schemas/Pet" } }
+      }
+    }
+  }
+}

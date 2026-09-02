@@ -1,0 +1,28 @@
+{
+  "name": "@o6lvl4/onetool-core",
+  "version": "0.1.0",
+  "description": "Front N operations with one tool: catalog, policy-gated consent, schema feedback, redaction. Zero dependencies, agent-SDK agnostic.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.11"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "onetool",
+  "private": true,
+  "packageManager": "pnpm@10.9.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "check": "pnpm run build && pnpm run test"
+  },
+  "devDependencies": {
+    "@o6lvl4/onetool-core": "workspace:*"
+  }
+}
