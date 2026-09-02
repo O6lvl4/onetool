@@ -1,12 +1,9 @@
 {
-  "name": "@o6lvl4/onetool-mcp",
+  "name": "@o6lvl4/onetool-provider-mcp",
   "version": "0.1.0",
-  "description": "MCP server adapter for onetool: exposes a whole API surface as four tools, with consent via MCP elicitation.",
+  "description": "onetool provider that aggregates other MCP servers: each upstream becomes a namespace and each of its tools an operation.",
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "onetool-mcp": "./dist/cli.js"
-  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -24,15 +21,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "@o6lvl4/onetool-core": "workspace:*",
-    "@o6lvl4/onetool-provider-mcp": "workspace:*",
-    "@o6lvl4/onetool-provider-openapi": "workspace:*",
-    "zod": "4.5.4"
+    "@modelcontextprotocol/sdk": "1.30.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
     "typescript": "^5.9.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "zod": "4.5.4"
   }
 }

@@ -32,6 +32,23 @@ describe.skipIf(!existsSync(cli))("onetool-mcp CLI (needs `pnpm run build`)", ()
     }
   });
 
+  it("aggregates another MCP server through --upstream, here the petstore example itself", async () => {
+    const client = await spawn(["--upstream", `pets=${process.execPath} ${cli} examples/petstore/onetool.config.mjs`, "--prefix", "hub"]);
+    try {
+      const services = await client.callTool({ name: "hub_services", arguments: {} });
+      expect(JSON.parse(text(services))).toEqual([{ name: "pets", summary: "onetool 0.1.0" }]);
+      const ops = JSON.parse(text(await client.callTool({ name: "hub_operations", arguments: {} }))) as { name: string; kind: string }[];
+      expect(ops.map((o) => `${o.name}:${o.kind}`)).toEqual(["petstore_services:read", "petstore_operations:read", "petstore_describe:read", "petstore_call:write"]);
+      const nested = await client.callTool({ name: "hub_call", arguments: { operation: "petstore_call", input: { operation: "listPets", input: { status: "sold" } } } });
+      expect(JSON.parse(text(nested))).toMatchObject({ stage: "confirm" });
+      // the upstream answers with structuredContent, which wraps non-object results as { result }
+      const listed = await client.callTool({ name: "hub_call", arguments: { operation: "petstore_services" } });
+      expect(JSON.parse(text(listed))).toEqual({ result: [{ name: "petstore", summary: "In-memory pet store" }] });
+    } finally {
+      await client.close();
+    }
+  });
+
   it("fronts an OpenAPI document without code", async () => {
     const client = await spawn(["--openapi", "packages/provider-openapi/test/fixtures/petstore.json", "--base-url", "http://127.0.0.1:9/v1", "--prefix", "shop", "--strict"]);
     try {

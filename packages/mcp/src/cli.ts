@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { OneTool, type OneToolOptions, type PolicyConfig } from "@o6lvl4/onetool-core";
+import { McpProvider, type McpUpstream } from "@o6lvl4/onetool-provider-mcp";
 import { OpenApiProvider, type OpenApiDocument } from "@o6lvl4/onetool-provider-openapi";
 import { createOneToolServer, VERSION } from "./index.js";
 
@@ -12,6 +13,8 @@ const USAGE = `onetool-mcp ${VERSION} — one MCP server, four tools, any API be
 Usage:
   onetool-mcp <config.mjs>                       load OneToolOptions from a module (default export: object or async function)
   onetool-mcp --openapi <file|url> [options]      front an OpenAPI 3.x document without writing code
+  onetool-mcp --upstream <name>=<command...> ...  aggregate other MCP servers (stdio); repeat for several
+  onetool-mcp --upstream <name>=<http(s) url> ... aggregate a Streamable HTTP MCP server
 
 Options (OpenAPI mode):
   --base-url <url>       override servers[0].url
@@ -29,6 +32,7 @@ The server speaks MCP over stdio; logs go to stderr.
 interface Args {
   config?: string;
   openapi?: string;
+  upstreams: McpUpstream[];
   baseUrl?: string;
   headers: Record<string, string>;
   namespace?: string;
@@ -49,6 +53,19 @@ const VALUED: Record<string, Setter> = {
   "--policy": (a, v) => (a.policy = v),
   "--prefix": (a, v) => (a.prefix = v),
   "--name": (a, v) => (a.name = v),
+  "--upstream": (a, v) => {
+    const eq = v.indexOf("=");
+    if (eq < 0) throw new Error(`--upstream expects "name=command args" or "name=url", got "${v}"`);
+    const name = v.slice(0, eq).trim();
+    const target = v.slice(eq + 1).trim();
+    if (/^https?:\/\//.test(target)) {
+      a.upstreams.push({ name, url: target });
+    } else {
+      const [command, ...args] = target.split(/\s+/);
+      if (!command) throw new Error(`--upstream ${name}: empty command`);
+      a.upstreams.push({ name, command, args });
+    }
+  },
   "--header": (a, v) => {
     const colon = v.indexOf(":");
     if (colon < 0) throw new Error(`--header expects "Name: value", got "${v}"`);
@@ -63,7 +80,7 @@ const FLAGS: Record<string, (args: Args) => void> = {
 };
 
 export function parseArgs(argv: readonly string[]): Args {
-  const args: Args = { headers: {}, strict: false, help: false };
+  const args: Args = { headers: {}, upstreams: [], strict: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i] as string;
     const flag = FLAGS[token];
@@ -125,9 +142,13 @@ async function applyOverrides(options: OneToolOptions, args: Args): Promise<OneT
 }
 
 export async function buildOptions(args: Args): Promise<OneToolOptions> {
+  if (args.upstreams.length > 0) {
+    const title = args.upstreams.length === 1 ? `the ${args.upstreams[0]?.name} MCP server` : `${args.upstreams.length} MCP servers`;
+    return applyOverrides({ providers: [new McpProvider(args.upstreams)], title }, args);
+  }
   if (args.openapi) return applyOverrides(await optionsFromOpenApi(args, args.openapi), args);
   if (args.config) return applyOverrides(await optionsFromConfig(args.config), args);
-  throw new Error(`give a config module or --openapi\n\n${USAGE}`);
+  throw new Error(`give a config module, --openapi or --upstream\n\n${USAGE}`);
 }
 
 async function main(): Promise<void> {

@@ -80,6 +80,17 @@ node packages/mcp/dist/cli.js --openapi ./api.json --base-url https://api.exampl
 
 `OpenApiProvider` flattens path, query, header and cookie parameters plus the request body into one input object, so the model never needs to know where a parameter travels. Local `$ref`s are inlined and cycles are cut. The output schema is the `{ status, body }` envelope the provider returns, with `body` taken from the first successful JSON response. GET and HEAD are `read`, everything else is `write`; `x-onetool-kind` on an operation overrides that. HTTP 400 and 422 are treated as invalid input and come back with the schema attached. YAML documents and remote `$ref`s are not supported.
 
+### Other MCP servers
+
+```sh
+node packages/mcp/dist/cli.js \
+  --upstream "files=npx -y @modelcontextprotocol/server-filesystem /tmp" \
+  --upstream "notes=https://notes.example.com/mcp" \
+  --strict --policy ./policy.json
+```
+
+`McpProvider` connects to each upstream (stdio or Streamable HTTP), turns every tool into an operation and every server into a namespace, and takes the kind from the tool's `readOnlyHint`. A host then sees four tools and one policy instead of every tool of every server. Structured results are preferred over text, so a list comes back as `{ result: [...] }`. Elicitation requests from an upstream are not forwarded yet; an upstream that needs one gets `unavailable`.
+
 ## Policy
 
 ```json
@@ -135,7 +146,9 @@ Throw `InputValidationError` when the remote side rejected the input and onetool
 |---|---|---|
 | `@o6lvl4/onetool-core` | `OneTool`, `Policy`, validation, redaction, `FunctionProvider`, `ToolSpec` (name / description / JSON Schema) | nothing |
 | `@o6lvl4/onetool-provider-openapi` | `OpenApiProvider` | core |
-| `@o6lvl4/onetool-mcp` | `createOneToolServer` (low-level `Server` plus elicitation) and the `onetool-mcp` CLI | core, provider-openapi, MCP SDK |
+| `@o6lvl4/onetool-provider-mcp` | `McpProvider`, aggregating other MCP servers | core, MCP SDK |
+| `@o6lvl4/onetool-eval` (private) | Harness comparing the four generic tools with one tool per operation on a real model ([README](packages/eval/README.md)) | core, Bedrock runtime |
+| `@o6lvl4/onetool-mcp` | `createOneToolServer` (low-level `Server` plus elicitation) and the `onetool-mcp` CLI | core, both providers, MCP SDK |
 
 `ToolSpec` has the shape that Bedrock Converse, the Anthropic API and OpenAI function calling all share, so an adapter for any of them registers `toolSpecs()` and forwards calls to `handleTool()`. The three catalog tools declare an `outputSchema`; the MCP adapter returns every successful result as `structuredContent` as well as text (plain objects as they are, anything else wrapped as `{ result }`), and the MCP client validates it against the declared schema.
 
@@ -143,7 +156,7 @@ Throw `InputValidationError` when the remote side rejected the input and onetool
 
 ```sh
 pnpm install
-pnpm run check   # build, test (core 30, openapi 8, mcp 6), then the quality gate
+pnpm run check   # build, test (core 30, openapi 9, mcp-provider 4, mcp 8), then the quality gate
 ```
 
 `pnpm run quality` runs [codopsy](https://github.com/O6lvl4/codopsy) over `packages/` and fails when the score drops below the committed `.codopsy-baseline.json`. The current score is A (100/100) with no open findings; keep it there.
