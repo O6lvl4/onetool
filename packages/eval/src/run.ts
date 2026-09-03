@@ -3,6 +3,7 @@ import { runClaudeCode } from "./claude-code.js";
 import { flatCondition, onetoolCondition } from "./conditions.js";
 import { runEpisode, type Condition, type Trace } from "./loop.js";
 import { BedrockDriver } from "./model.js";
+import type { Layout } from "./mcp-server.js";
 import { buildWorld, TASKS, type Task } from "./tasks.js";
 
 const SYSTEM =
@@ -28,28 +29,43 @@ interface Args {
   driver: "claude-code" | "bedrock";
   trials: number;
   model: string;
+  padding: number;
   tasks?: string[];
-  conditions: ("onetool" | "flat")[];
+  conditions: Layout[];
 }
+
+const LAYOUTS: Layout[] = ["onetool", "onetool-inline", "flat"];
 
 const DEFAULT_MODEL = { "claude-code": "claude-haiku-4-5-20251001", bedrock: "jp.anthropic.claude-haiku-4-5-20251001-v1:0" } as const;
 
+const SETTERS: Record<string, (args: Args, value: string) => void> = {
+  "--driver": (a, v) => {
+    if (v === "claude-code" || v === "bedrock") a.driver = v;
+  },
+  "--trials": (a, v) => (a.trials = Number(v)),
+  "--model": (a, v) => (a.model = v),
+  "--padding": (a, v) => (a.padding = Number(v)),
+  "--tasks": (a, v) => (a.tasks = v.split(",")),
+  "--conditions": (a, v) => (a.conditions = v.split(",").filter((c): c is Layout => (LAYOUTS as string[]).includes(c))),
+};
+
 function parseArgs(argv: string[]): Args {
-  const args: Args = { driver: "claude-code", trials: 3, model: "", conditions: ["onetool", "flat"] };
-  for (let i = 0; i < argv.length; i++) {
-    const [key, value] = [argv[i], argv[i + 1]];
-    if (!value) continue;
-    if (key === "--driver" && (value === "claude-code" || value === "bedrock")) args.driver = value;
-    if (key === "--trials") args.trials = Number(value);
-    if (key === "--model") args.model = value;
-    if (key === "--tasks") args.tasks = value.split(",");
-    if (key === "--conditions") args.conditions = value.split(",").filter((c): c is "onetool" | "flat" => c === "onetool" || c === "flat");
+  const args: Args = { driver: "claude-code", trials: 3, model: "", padding: 0, conditions: ["onetool", "flat"] };
+  for (let i = 0; i + 1 < argv.length; i += 2) {
+    const setter = SETTERS[argv[i] ?? ""];
+    if (setter) setter(args, argv[i + 1] ?? "");
   }
   args.model ||= process.env["ONETOOL_EVAL_MODEL"] ?? DEFAULT_MODEL[args.driver];
   return args;
 }
 
-function record(task: Task, condition: string, trial: number, trace: Trace, extra: { inputTokens: number; outputTokens: number; costUsd: number }): RunRecord {
+interface Cell {
+  task: Task;
+  condition: string;
+  trial: number;
+}
+
+function record({ task, condition, trial }: Cell, trace: Trace, extra: { inputTokens: number; outputTokens: number; costUsd: number }): RunRecord {
   return {
     task: task.id,
     condition,
@@ -64,16 +80,16 @@ function record(task: Task, condition: string, trial: number, trace: Trace, extr
   };
 }
 
-async function runBedrock(args: Args, task: Task, layout: "onetool" | "flat", trial: number): Promise<RunRecord> {
-  const world = buildWorld();
+async function runBedrock(args: Args, task: Task, layout: Layout, trial: number): Promise<RunRecord> {
+  const world = buildWorld({ inlineCatalog: layout === "onetool-inline", padding: args.padding });
   const ctx = { confirm: async () => "approved" as const, meta: { trial } };
-  const condition: Condition = layout === "flat" ? await flatCondition(world.onetool, ctx) : onetoolCondition(world.onetool, ctx);
+  const condition: Condition = layout === "flat" ? await flatCondition(world.onetool, ctx) : await onetoolCondition(world.onetool, ctx);
   const trace = await runEpisode({ driver: new BedrockDriver({ modelId: args.model }), system: SYSTEM, prompt: task.prompt, condition });
-  return record(task, layout, trial, trace, { inputTokens: trace.usage.input, outputTokens: trace.usage.output, costUsd: 0 });
+  return record({ task, condition: layout, trial }, trace, { inputTokens: trace.usage.input, outputTokens: trace.usage.output, costUsd: 0 });
 }
 
-async function runClaude(args: Args, task: Task, layout: "onetool" | "flat", trial: number): Promise<RunRecord> {
-  const episode = await runClaudeCode({ model: args.model, layout, system: SYSTEM, prompt: task.prompt });
+async function runClaude(args: Args, task: Task, layout: Layout, trial: number): Promise<RunRecord> {
+  const episode = await runClaudeCode({ model: args.model, layout, padding: args.padding, system: SYSTEM, prompt: task.prompt });
   const trace: Trace = {
     finalText: episode.finalText,
     stop: episode.stopReason === "end_turn" ? "end" : "other",
@@ -84,7 +100,7 @@ async function runClaude(args: Args, task: Task, layout: "onetool" | "flat", tri
     history: [],
   };
   const inputTokens = episode.usage.input + episode.usage.cacheCreate + episode.usage.cacheRead;
-  return record(task, layout, trial, trace, { inputTokens, outputTokens: episode.usage.output, costUsd: episode.costUsd });
+  return record({ task, condition: layout, trial }, trace, { inputTokens, outputTokens: episode.usage.output, costUsd: episode.costUsd });
 }
 
 function mean(values: number[]): number {
@@ -139,9 +155,9 @@ async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   await mkdir(new URL("../results/", import.meta.url), { recursive: true });
   const file = new URL(`../results/${stamp}.json`, import.meta.url);
-  const meta = { driver: args.driver, model: args.model, trials: args.trials, system: SYSTEM, durationMs: Date.now() - started };
+  const meta = { driver: args.driver, model: args.model, trials: args.trials, padding: args.padding, system: SYSTEM, durationMs: Date.now() - started };
   await writeFile(file, JSON.stringify({ ...meta, tasks: tasks.map((t) => ({ id: t.id, prompt: t.prompt, probes: t.probes })), records, table }, null, 2));
-  process.stdout.write(`\ndriver: ${args.driver}, model: ${args.model}, trials per cell: ${args.trials}\n\n${table}\n\nresults: ${file.pathname}\n`);
+  process.stdout.write(`\ndriver: ${args.driver}, model: ${args.model}, trials per cell: ${args.trials}, padding: ${args.padding}\n\n${table}\n\nresults: ${file.pathname}\n`);
 }
 
 main().catch((error: unknown) => {

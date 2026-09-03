@@ -23,10 +23,9 @@ export function createOneToolServer(onetool: OneTool, options: OneToolServerOpti
     { name: options.name ?? "onetool", version: options.version ?? VERSION },
     { capabilities: { tools: {} }, ...(options.instructions ? { instructions: options.instructions } : {}) },
   );
-  const specs = onetool.toolSpecs();
   const confirm = selectConfirm(options.confirm, server);
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: specs.map(toMcpTool) }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: (await onetool.toolSpecsWithCatalog()).map(toMcpTool) }));
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const outcome = await onetool.handleTool(request.params.name, request.params.arguments ?? {}, {
       ...(confirm ? { confirm } : {}),

@@ -3,9 +3,11 @@
  * The world of tasks.ts served over MCP in one of two layouts, so an external agent
  * (Claude Code in headless mode) can be measured instead of a hand-written loop.
  *
- *   ONETOOL_EVAL_LAYOUT=onetool  four generic tools (default)
- *   ONETOOL_EVAL_LAYOUT=flat     one tool per operation
- *   ONETOOL_EVAL_LOG=<file>      every tool call is appended as one JSON line
+ *   ONETOOL_EVAL_LAYOUT=onetool         four generic tools (default)
+ *   ONETOOL_EVAL_LAYOUT=onetool-inline  four generic tools with the operation index inside the call tool
+ *   ONETOOL_EVAL_LAYOUT=flat            one tool per operation
+ *   ONETOOL_EVAL_PADDING=<n>            add n synthetic operations to the world
+ *   ONETOOL_EVAL_LOG=<file>             every tool call is appended as one JSON line
  */
 import { appendFileSync } from "node:fs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -22,7 +24,9 @@ export interface LoggedCall {
   ms: number;
 }
 
-const layout = process.env["ONETOOL_EVAL_LAYOUT"] === "flat" ? "flat" : "onetool";
+const layout = (["flat", "onetool-inline"].find((l) => l === process.env["ONETOOL_EVAL_LAYOUT"]) ?? "onetool") as Layout;
+const padding = Number(process.env["ONETOOL_EVAL_PADDING"] ?? 0);
+export type Layout = "onetool" | "onetool-inline" | "flat";
 const logFile = process.env["ONETOOL_EVAL_LOG"];
 const ctx: CallContext = { confirm: async () => "approved", meta: { layout } };
 
@@ -58,7 +62,7 @@ async function flatTools(onetool: OneTool): Promise<{ tools: Tool[]; refs: Map<s
 }
 
 async function main(): Promise<void> {
-  const { onetool } = buildWorld();
+  const { onetool } = buildWorld({ inlineCatalog: layout === "onetool-inline", padding });
   const server = new Server({ name: `onetool-eval-${layout}`, version: "0.0.0" }, { capabilities: { tools: {} } });
 
   if (layout === "flat") {
@@ -81,9 +85,8 @@ async function main(): Promise<void> {
       return { content: [{ type: "text", text: JSON.stringify(result) }], isError: true };
     });
   } else {
-    const specs = onetool.toolSpecs();
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: specs.map((s) => ({
+      tools: (await onetool.toolSpecsWithCatalog()).map((s) => ({
         name: s.name,
         description: s.description,
         inputSchema: { ...s.inputSchema, type: "object" } as Tool["inputSchema"],

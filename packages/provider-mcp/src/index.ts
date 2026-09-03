@@ -36,9 +36,11 @@ interface Connected {
  */
 export class McpProvider implements Provider {
   private readonly upstreams: McpUpstream[];
+  private readonly clientInfo: { name: string; version: string };
   private readonly connections = new Map<string, Promise<Connected>>();
 
-  constructor(upstreams: McpUpstream[], private readonly clientInfo = { name: "onetool", version: "0.1.0" }) {
+  constructor(upstreams: McpUpstream[], clientInfo = { name: "onetool", version: "0.1.0" }) {
+    this.clientInfo = clientInfo;
     const names = new Set<string>();
     for (const u of upstreams) {
       if (names.has(u.name)) throw new Error(`McpProvider: upstream "${u.name}" is listed twice`);
@@ -48,14 +50,14 @@ export class McpProvider implements Provider {
   }
 
   async namespaces(): Promise<NamespaceInfo[]> {
-    return Promise.all(
-      this.upstreams.map(async (u) => {
-        const { client } = await this.connect(u.name);
-        const server = client.getServerVersion();
-        const instructions = cleanText(client.getInstructions(), 200);
-        return { name: u.name, summary: u.summary ?? (instructions || `${server?.name ?? "MCP server"} ${server?.version ?? ""}`.trim()) };
-      }),
-    );
+    return Promise.all(this.upstreams.map((u) => this.describeUpstream(u)));
+  }
+
+  private async describeUpstream(upstream: McpUpstream): Promise<NamespaceInfo> {
+    const { client } = await this.connect(upstream.name);
+    const server = client.getServerVersion();
+    const instructions = cleanText(client.getInstructions(), 200);
+    return { name: upstream.name, summary: upstream.summary ?? (instructions || `${server?.name ?? "MCP server"} ${server?.version ?? ""}`.trim()) };
   }
 
   async operations(namespace: string): Promise<OperationSummary[]> {

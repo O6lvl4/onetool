@@ -1,0 +1,856 @@
+{
+  "driver": "claude-code",
+  "model": "claude-haiku-4-5-20251001",
+  "trials": 3,
+  "padding": 0,
+  "system": "You are an assistant that answers questions about a pet store using the tools available. Use tools rather than guessing. When a tool refuses an action, say so plainly. Answer in one or two short sentences.",
+  "durationMs": 150607,
+  "tasks": [
+    {
+      "id": "count-sold",
+      "prompt": "How many pets have the status \"sold\"? Answer with the number.",
+      "probes": "one read call with a filter"
+    },
+    {
+      "id": "find-by-name",
+      "prompt": "What is the id of the pet called Nori?",
+      "probes": "choosing between search and list"
+    },
+    {
+      "id": "typed-id",
+      "prompt": "Show me the pet whose id is 2. Give its name and status.",
+      "probes": "integer parameter; a string id triggers schema feedback"
+    },
+    {
+      "id": "cross-namespace",
+      "prompt": "Is Bolt in stock? How many units?",
+      "probes": "two namespaces: find the id in one, look up stock in the other"
+    },
+    {
+      "id": "write-with-consent",
+      "prompt": "Add a pet named Zoe in the cat category and tell me its new id.",
+      "probes": "write operation; consent is auto-approved in this harness"
+    },
+    {
+      "id": "denied-write",
+      "prompt": "Delete the pet with id 1.",
+      "probes": "policy denies; the model must report that instead of pretending"
+    }
+  ],
+  "records": [
+    {
+      "task": "count-sold",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9214,
+      "outputTokens": 394,
+      "costUsd": 0.012173,
+      "finalText": "2",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "count-sold",
+      "condition": "onetool-inline",
+      "trial": 2,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9171,
+      "outputTokens": 354,
+      "costUsd": 0.01192,
+      "finalText": "2",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "count-sold",
+      "condition": "onetool-inline",
+      "trial": 3,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9213,
+      "outputTokens": 367,
+      "costUsd": 0.011996999999999999,
+      "finalText": "2",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "find-by-name",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 4,
+      "toolCalls": 3,
+      "validateFailures": 1,
+      "inputTokens": 12701,
+      "outputTokens": 461,
+      "costUsd": 0.015976999999999998,
+      "finalText": "The id of the pet called Nori is **4**. Nori is a cat with a pending status.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "searchPets",
+            "input": {
+              "name": "Nori"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "name": "Nori"
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "query": "Nori"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "find-by-name",
+      "condition": "onetool-inline",
+      "trial": 2,
+      "success": true,
+      "modelCalls": 4,
+      "toolCalls": 3,
+      "validateFailures": 1,
+      "inputTokens": 12762,
+      "outputTokens": 531,
+      "costUsd": 0.016373000000000002,
+      "finalText": "The pet Nori has an ID of **4**. It's a cat with a pending status.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "searchPets",
+            "input": {
+              "name": "Nori"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "name": "Nori"
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "query": "Nori"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "find-by-name",
+      "condition": "onetool-inline",
+      "trial": 3,
+      "success": true,
+      "modelCalls": 4,
+      "toolCalls": 3,
+      "validateFailures": 1,
+      "inputTokens": 12723,
+      "outputTokens": 471,
+      "costUsd": 0.016034,
+      "finalText": "The pet named Nori has an id of **4**. Nori is a cat with a \"pending\" status.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "searchPets",
+            "input": {
+              "name": "Nori"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "name": "Nori"
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "query": "Nori"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "typed-id",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9102,
+      "outputTokens": 328,
+      "costUsd": 0.011722,
+      "finalText": "The pet with id 2 is **Mia** and its status is **sold**.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "getPet",
+            "input": {
+              "id": 2
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "getPet",
+            "namespace": "petstore",
+            "input": {
+              "id": 2
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "typed-id",
+      "condition": "onetool-inline",
+      "trial": 2,
+      "success": true,
+      "modelCalls": 4,
+      "toolCalls": 3,
+      "validateFailures": 1,
+      "inputTokens": 12793,
+      "outputTokens": 510,
+      "costUsd": 0.016323,
+      "finalText": "Pet with id 2 is **Mia** with status **sold**.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "getPet",
+            "input": {
+              "petId": 2
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "getPet",
+            "input": {
+              "petId": 2
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "getPet",
+            "input": {
+              "id": 2
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "typed-id",
+      "condition": "onetool-inline",
+      "trial": 3,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9095,
+      "outputTokens": 332,
+      "costUsd": 0.01173,
+      "finalText": "The pet with id 2 is named **Mia** and its status is **sold**.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "getPet",
+            "input": {
+              "id": 2
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "getPet",
+            "input": {
+              "id": 2
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "cross-namespace",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 6,
+      "toolCalls": 5,
+      "validateFailures": 2,
+      "inputTokens": 20588,
+      "outputTokens": 730,
+      "costUsd": 0.025196999999999997,
+      "finalText": "Yes, Bolt is in stock with **1 unit** available.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "searchPets",
+            "input": {
+              "name": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "name": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "query": "Bolt"
+            }
+          },
+          "isError": false
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "inventory",
+            "operation": "getStock",
+            "input": {
+              "id": 3
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "inventory",
+            "operation": "getStock",
+            "input": {
+              "petId": 3
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "cross-namespace",
+      "condition": "onetool-inline",
+      "trial": 2,
+      "success": true,
+      "modelCalls": 5,
+      "toolCalls": 4,
+      "validateFailures": 1,
+      "inputTokens": 16418,
+      "outputTokens": 593,
+      "costUsd": 0.020347,
+      "finalText": "Yes, Bolt is in stock with **1 unit** available.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "searchPets",
+            "input": {
+              "name": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "name": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "query": "Bolt"
+            }
+          },
+          "isError": false
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "inventory",
+            "operation": "getStock",
+            "input": {
+              "petId": 3
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "cross-namespace",
+      "condition": "onetool-inline",
+      "trial": 3,
+      "success": true,
+      "modelCalls": 5,
+      "toolCalls": 4,
+      "validateFailures": 1,
+      "inputTokens": 16523,
+      "outputTokens": 613,
+      "costUsd": 0.020547000000000003,
+      "finalText": "Yes, Bolt is in stock with **1 unit** available.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "searchPets",
+            "input": {
+              "nameSubstring": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "nameSubstring": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "query": "Bolt"
+            }
+          },
+          "isError": false
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "inventory",
+            "operation": "getStock",
+            "input": {
+              "petId": 3
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "write-with-consent",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 4,
+      "toolCalls": 3,
+      "validateFailures": 0,
+      "inputTokens": 12750,
+      "outputTokens": 527,
+      "costUsd": 0.016352,
+      "finalText": "Done! Zoe has been added as a cat and her new ID is **7**.",
+      "calls": [
+        {
+          "name": "api_describe",
+          "input": {
+            "operation": "createPet"
+          },
+          "isError": true
+        },
+        {
+          "name": "api_describe",
+          "input": {
+            "namespace": "petstore",
+            "operation": "createPet"
+          },
+          "isError": false
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "createPet",
+            "input": {
+              "name": "Zoe",
+              "category": "cat"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "write-with-consent",
+      "condition": "onetool-inline",
+      "trial": 2,
+      "success": true,
+      "modelCalls": 4,
+      "toolCalls": 3,
+      "validateFailures": 0,
+      "inputTokens": 12636,
+      "outputTokens": 489,
+      "costUsd": 0.016053,
+      "finalText": "Perfect! I've added Zoe to the cat category. Her new ID is **7**.",
+      "calls": [
+        {
+          "name": "api_describe",
+          "input": {
+            "operation": "createPet"
+          },
+          "isError": true
+        },
+        {
+          "name": "api_describe",
+          "input": {
+            "namespace": "petstore",
+            "operation": "createPet"
+          },
+          "isError": false
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "createPet",
+            "input": {
+              "name": "Zoe",
+              "category": "cat"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "write-with-consent",
+      "condition": "onetool-inline",
+      "trial": 3,
+      "success": true,
+      "modelCalls": 4,
+      "toolCalls": 3,
+      "validateFailures": 0,
+      "inputTokens": 12638,
+      "outputTokens": 507,
+      "costUsd": 0.016139999999999998,
+      "finalText": "Done! I've added a pet named Zoe in the cat category, and her new ID is **7**.",
+      "calls": [
+        {
+          "name": "api_describe",
+          "input": {
+            "operation": "createPet"
+          },
+          "isError": true
+        },
+        {
+          "name": "api_describe",
+          "input": {
+            "namespace": "petstore",
+            "operation": "createPet"
+          },
+          "isError": false
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "createPet",
+            "input": {
+              "name": "Zoe",
+              "category": "cat"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "denied-write",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9179,
+      "outputTokens": 370,
+      "costUsd": 0.011981,
+      "finalText": "I cannot delete the pet because the deletePet operation is denied by system policy.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "deletePet",
+            "input": {
+              "id": 1
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "deletePet",
+            "input": {
+              "id": 1
+            }
+          },
+          "isError": true,
+          "stage": "policy"
+        }
+      ]
+    },
+    {
+      "task": "denied-write",
+      "condition": "onetool-inline",
+      "trial": 2,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9253,
+      "outputTokens": 403,
+      "costUsd": 0.01222,
+      "finalText": "I cannot delete the pet—the operation has been denied by policy.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "deletePet",
+            "input": {
+              "id": 1
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "deletePet",
+            "input": {
+              "id": 1
+            }
+          },
+          "isError": true,
+          "stage": "policy"
+        }
+      ]
+    },
+    {
+      "task": "denied-write",
+      "condition": "onetool-inline",
+      "trial": 3,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 9179,
+      "outputTokens": 355,
+      "costUsd": 0.011911,
+      "finalText": "I cannot delete the pet with id 1—the system's policy explicitly denies the delete operation for pets.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "deletePet",
+            "input": {
+              "id": 1
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "deletePet",
+            "input": {
+              "id": 1
+            }
+          },
+          "isError": true,
+          "stage": "policy"
+        }
+      ]
+    }
+  ],
+  "table": "| task | condition | success | model turns | tool calls | validate fails | input tok | output tok | cost USD |\n|---|---|---|---|---|---|---|---|---|\n| count-sold | onetool-inline | 3/3 | 3.0 | 2.0 | 0.0 | 9,199 | 372 | 0.0120 |\n| find-by-name | onetool-inline | 3/3 | 4.0 | 3.0 | 1.0 | 12,729 | 488 | 0.0161 |\n| typed-id | onetool-inline | 3/3 | 3.3 | 2.3 | 0.3 | 10,330 | 390 | 0.0133 |\n| cross-namespace | onetool-inline | 3/3 | 5.3 | 4.3 | 1.3 | 17,843 | 645 | 0.0220 |\n| write-with-consent | onetool-inline | 3/3 | 4.0 | 3.0 | 0.0 | 12,675 | 508 | 0.0162 |\n| denied-write | onetool-inline | 3/3 | 3.0 | 2.0 | 0.0 | 9,204 | 376 | 0.0120 |\n| all | onetool-inline | 18/18 | 3.8 | 2.8 | 0.4 | 11,997 | 463 | 0.0153 |"
+}

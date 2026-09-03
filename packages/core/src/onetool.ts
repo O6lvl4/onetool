@@ -33,6 +33,13 @@ export interface OneToolOptions {
   prefix?: string;
   /** One phrase naming what sits behind the tool, used in tool descriptions. */
   title?: string;
+  /**
+   * Put a compact index of every operation (namespace, name, one-line summary) into the call tool's
+   * description, and tell the model to call directly instead of listing first. On by default: in the
+   * measurements in the README it cut turns and tokens at every catalog size. `maxChars` bounds the
+   * index (default 4000); pass `false` to leave the call tool's description bare.
+   */
+  inlineCatalog?: boolean | { maxChars?: number };
   onEvent?: (event: CallEvent) => void;
 }
 
@@ -58,6 +65,7 @@ interface Gated {
 
 type Failure = Extract<CallResult, { ok: false }>;
 
+const DEFAULT_CATALOG_CHARS = 4000;
 const DEFAULT_RESULT_LIMIT = 32 * 1024;
 const DEFAULT_BODY_LIMIT = 64 * 1024;
 
@@ -76,6 +84,7 @@ export class OneTool {
   private readonly redactKeys: readonly string[];
   private readonly redactExtra: ((value: unknown) => unknown) | undefined;
   private readonly title: string;
+  private readonly catalogChars: number;
   private readonly onEvent: ((event: CallEvent) => void) | undefined;
   private index: Map<string, NamespaceEntry> | undefined;
 
@@ -85,6 +94,7 @@ export class OneTool {
     this.confirmDefault = options.confirm;
     this.prefix = options.prefix ?? "api";
     this.title = options.title ?? "the configured APIs";
+    this.catalogChars = catalogBudget(options.inlineCatalog);
     this.onEvent = options.onEvent;
     this.resultLimit = options.response?.resultLimit ?? DEFAULT_RESULT_LIMIT;
     this.bodyLimit = options.response?.bodyLimit ?? DEFAULT_BODY_LIMIT;
@@ -204,6 +214,33 @@ export class OneTool {
     return buildToolSpecs(this.prefix, this.title);
   }
 
+  /** `toolSpecs()` plus the inline catalog when it is enabled. Adapters that can wait should use this one. */
+  async toolSpecsWithCatalog(): Promise<ToolSpec[]> {
+    const specs = this.toolSpecs();
+    if (this.catalogChars <= 0) return specs;
+    const catalog = await this.catalogText(this.catalogChars);
+    return specs.map((spec) => (spec.name === `${this.prefix}_call` ? { ...spec, description: withCatalog(spec.description, catalog) } : spec));
+  }
+
+  /** One line per namespace: `namespace: op — summary; op — summary`, cut at `maxChars` with a pointer to the list tool. */
+  async catalogText(maxChars: number): Promise<string> {
+    const lines: string[] = [];
+    let omitted = 0;
+    let used = 0;
+    for (const ns of await this.services()) {
+      const entries = (await this.operations(ns.name)).map((op) => `${op.name} — ${op.summary}`);
+      const line = `${ns.name}: ${entries.join("; ")}`;
+      if (used + line.length + 1 > maxChars) {
+        omitted += entries.length;
+        continue;
+      }
+      lines.push(line);
+      used += line.length + 1;
+    }
+    if (omitted > 0) lines.push(`(${omitted} more operations; use ${this.prefix}_operations to list them)`);
+    return lines.join("\n");
+  }
+
   /** Route a tool invocation by name. Adapters register `toolSpecs()` and forward calls here. */
   handleTool(name: string, args: unknown, ctx: CallContext = {}): Promise<ToolOutcome> {
     return dispatchTool(this, name, args, ctx);
@@ -223,4 +260,14 @@ export class OneTool {
   private async resolve(namespace: string | undefined, operation: string): Promise<Resolved> {
     return resolveOperation(pickNamespace(await this.namespaces(), namespace), operation, `${this.prefix}_operations`);
   }
+}
+
+function catalogBudget(option: OneToolOptions["inlineCatalog"]): number {
+  if (option === false) return 0;
+  if (option === true || option === undefined) return DEFAULT_CATALOG_CHARS;
+  return option.maxChars ?? DEFAULT_CATALOG_CHARS;
+}
+
+function withCatalog(description: string, catalog: string): string {
+  return `${description} Call directly when you know the operation: an unknown name returns candidates and invalid input returns the schema, so calling first is usually faster than listing or describing.\nOperations (namespace: name — summary):\n${catalog}`;
 }

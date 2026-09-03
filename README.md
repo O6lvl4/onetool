@@ -91,6 +91,30 @@ node packages/mcp/dist/cli.js \
 
 `McpProvider` connects to each upstream (stdio or Streamable HTTP), turns every tool into an operation and every server into a namespace, and takes the kind from the tool's `readOnlyHint`. A host then sees four tools and one policy instead of every tool of every server. Structured results are preferred over text, so a list comes back as `{ result: [...] }`. Elicitation requests from an upstream are not forwarded yet; an upstream that needs one gets `unavailable`.
 
+## Evidence
+
+Does the four-tool layout actually beat one tool per operation? `packages/eval` runs the same six tasks against the same in-memory pet store (10 operations) and warehouse (3 operations) in three layouts, with Claude Code in headless mode as the agent, Claude Haiku 4.5, built-in tools switched off and the same policy underneath. Success is checked on the final answer and on which operations ran. Numbers are means over 3 trials per task; tokens are the total input over all turns of an episode, so they measure context pressure. Cost is listed for completeness but depends on how warm the prompt cache was, so compare tokens and turns.
+
+| layout, 13 operations | success | model turns | tool calls | input tokens | output tokens |
+|---|---|---|---|---|---|
+| `flat`: one tool per operation | 18/18 | 2.2 | 1.2 | 6,599 | 213 |
+| `onetool`: four tools, bare descriptions | 18/18 | 5.3 | 4.3 | 16,882 | 597 |
+| `onetool-inline`: four tools, catalog in the call tool | 18/18 | 3.8 | 2.8 | 11,997 | 463 |
+
+At thirteen operations the flat layout wins outright. The generic tools cost discovery turns (`services`, `operations`, `describe`) on every task, and thirteen tool definitions are cheap. Putting the operation index into the call tool's description removes part of that overhead, which is why it is now the default.
+
+The picture flips as the catalog grows. With 200 synthetic read operations added (213 in total; one trial, three tasks):
+
+| layout, 213 operations | success | model turns | tool calls | input tokens | output tokens |
+|---|---|---|---|---|---|
+| `flat` | 3/3 | 2.3 | 1.3 | 48,237 | 233 |
+| `onetool` | 3/3 | 5.7 | 4.7 | 18,694 | 618 |
+| `onetool-inline` | 3/3 | 3.3 | 2.3 | 11,930 | 415 |
+
+Every turn of the flat layout carries all 213 definitions (roughly 35,000 tokens); the four generic tools stay the same size, and the inline index is bounded. Claude Code did not defer or search the 213 MCP tools in this run, so the flat cost is the real cost of a big tool list on this host.
+
+What this says about when to use onetool: below a few dozen operations, prefer plain tools unless you want the policy layer; above that, the four tools pay for themselves, and the inline catalog is worth its tokens at every size tested. Raw traces for every episode are in [`packages/eval/results/`](packages/eval/results/); rerun with `pnpm --filter @o6lvl4/onetool-eval run eval`.
+
 ## Policy
 
 ```json

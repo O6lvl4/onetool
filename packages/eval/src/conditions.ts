@@ -7,10 +7,10 @@ function stageOf(json: unknown): string | undefined {
 }
 
 /** onetool as shipped: four generic tools, routed through handleTool. */
-export function onetoolCondition(onetool: OneTool, ctx: CallContext): Condition {
+export async function onetoolCondition(onetool: OneTool, ctx: CallContext): Promise<Condition> {
   return {
     name: "onetool",
-    tools: onetool.toolSpecs().map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+    tools: (await onetool.toolSpecsWithCatalog()).map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
     execute: async (name, input) => {
       const outcome = await onetool.handleTool(name, input, ctx);
       const json = "json" in outcome.content ? outcome.content.json : undefined;

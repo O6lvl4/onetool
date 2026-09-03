@@ -40,6 +40,8 @@ export interface BedrockDriverOptions {
   maxTokens?: number;
 }
 
+const STOP: Record<string, ModelTurn["stop"]> = { tool_use: "tool", end_turn: "end", max_tokens: "max" };
+
 /** Amazon Bedrock Converse. Credentials come from the default chain (AWS_PROFILE etc.). */
 export class BedrockDriver implements ModelDriver {
   readonly id: string;
@@ -67,7 +69,7 @@ export class BedrockDriver implements ModelDriver {
     const toolUses: ToolUse[] = content
       .filter((b): b is ContentBlock.ToolUseMember => b.toolUse !== undefined)
       .map((b) => ({ id: b.toolUse.toolUseId ?? "", name: b.toolUse.name ?? "", input: (b.toolUse.input ?? {}) as Record<string, unknown> }));
-    const stop = response.stopReason === "tool_use" ? "tool" : response.stopReason === "end_turn" ? "end" : response.stopReason === "max_tokens" ? "max" : "other";
+    const stop = STOP[response.stopReason ?? ""] ?? "other";
     return { text, toolUses, stop, usage: { input: response.usage?.inputTokens ?? 0, output: response.usage?.outputTokens ?? 0 } };
   }
 }

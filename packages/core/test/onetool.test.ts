@@ -140,6 +140,20 @@ describe("OneTool.call", () => {
   });
 });
 
+describe("OneTool inline catalog", () => {
+  it("appends a bounded operation index to the call tool by default, and not when disabled", async () => {
+    const plain = new OneTool({ providers: [petstore()], inlineCatalog: false });
+    expect((await plain.toolSpecsWithCatalog())[3]?.description).not.toContain("Operations (");
+    const inline = new OneTool({ providers: [petstore()] });
+    const call = (await inline.toolSpecsWithCatalog())[3]?.description ?? "";
+    expect(call).toContain("petstore: listPets — List pets; getPet — Get one pet;");
+    expect(call).toContain("Call directly when you know the operation");
+    expect((await inline.toolSpecsWithCatalog())[2]?.description).not.toContain("Operations (");
+    const tiny = new OneTool({ providers: [petstore()], inlineCatalog: { maxChars: 10 } });
+    expect(await tiny.catalogText(10)).toBe("(7 more operations; use api_operations to list them)");
+  });
+});
+
 describe("OneTool tool surface", () => {
   it("names tools by prefix and routes handleTool", async () => {
     const tool = new OneTool({ providers: [petstore()], prefix: "shop" });

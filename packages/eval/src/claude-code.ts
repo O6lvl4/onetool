@@ -8,11 +8,12 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { LoggedCall } from "./mcp-server.js";
+import type { Layout, LoggedCall } from "./mcp-server.js";
 
 export interface ClaudeCodeOptions {
   model: string;
-  layout: "onetool" | "flat";
+  layout: Layout;
+  padding: number;
   system: string;
   prompt: string;
   maxTurns?: number;
@@ -48,10 +49,22 @@ export async function runClaudeCode(options: ClaudeCodeOptions): Promise<ClaudeC
   await writeFile(
     mcpConfig,
     JSON.stringify({
-      mcpServers: { eval: { command: process.execPath, args: [SERVER], env: { ONETOOL_EVAL_LAYOUT: options.layout, ONETOOL_EVAL_LOG: logFile } } },
+      mcpServers: {
+        eval: { command: process.execPath, args: [SERVER], env: { ONETOOL_EVAL_LAYOUT: options.layout, ONETOOL_EVAL_PADDING: String(options.padding), ONETOOL_EVAL_LOG: logFile } },
+      },
     }),
   );
-  const args = [
+  try {
+    const stdout = await exec("claude", cliArgs(options, mcpConfig), dir);
+    return toEpisode(JSON.parse(stdout) as CliJson, await readLog(logFile));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** Only the served MCP tools are available: built-ins off, our own system prompt, no session on disk. */
+function cliArgs(options: ClaudeCodeOptions, mcpConfig: string): string[] {
+  return [
     "-p", options.prompt,
     "--output-format", "json",
     "--model", options.model,
@@ -63,28 +76,24 @@ export async function runClaudeCode(options: ClaudeCodeOptions): Promise<ClaudeC
     "--max-turns", String(options.maxTurns ?? 12),
     "--no-session-persistence",
   ];
-  try {
-    const stdout = await exec("claude", args, dir);
-    const json = JSON.parse(stdout) as CliJson;
-    const calls = await readLog(logFile);
-    return {
-      finalText: json.result ?? "",
-      stopReason: json.stop_reason ?? "unknown",
-      isError: json.is_error ?? false,
-      numTurns: json.num_turns ?? 0,
-      usage: {
-        input: json.usage?.input_tokens ?? 0,
-        cacheCreate: json.usage?.cache_creation_input_tokens ?? 0,
-        cacheRead: json.usage?.cache_read_input_tokens ?? 0,
-        output: json.usage?.output_tokens ?? 0,
-      },
-      costUsd: json.total_cost_usd ?? 0,
-      durationMs: json.duration_api_ms ?? 0,
-      calls,
-    };
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
+}
+
+const EMPTY_USAGE = { input_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0, output_tokens: 0 };
+const EMPTY_JSON = { result: "", stop_reason: "unknown", is_error: false, num_turns: 0, total_cost_usd: 0, duration_api_ms: 0 };
+
+function toEpisode(json: CliJson, calls: LoggedCall[]): ClaudeCodeEpisode {
+  const j = { ...EMPTY_JSON, ...json };
+  const usage = { ...EMPTY_USAGE, ...json.usage };
+  return {
+    finalText: j.result,
+    stopReason: j.stop_reason,
+    isError: j.is_error,
+    numTurns: j.num_turns,
+    usage: { input: usage.input_tokens, cacheCreate: usage.cache_creation_input_tokens, cacheRead: usage.cache_read_input_tokens, output: usage.output_tokens },
+    costUsd: j.total_cost_usd,
+    durationMs: j.duration_api_ms,
+    calls,
+  };
 }
 
 async function readLog(file: string): Promise<LoggedCall[]> {

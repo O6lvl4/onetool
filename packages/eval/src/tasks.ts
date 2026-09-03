@@ -34,8 +34,30 @@ const ORDERS = [
 
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 
+export interface WorldOptions {
+  /** Put the operation index into the call tool's description. */
+  inlineCatalog?: boolean;
+  /** Add this many synthetic read operations in a third namespace, to see how each layout scales. */
+  padding?: number;
+}
+
+const WORDS = ["revenue", "churn", "latency", "uptime", "backlog", "margin", "traffic", "returns", "signups", "refunds", "tickets", "leads"];
+
+function paddingProvider(count: number): FunctionProvider {
+  const ops = Array.from({ length: count }, (_, i) => {
+    const topic = `${WORDS[i % WORDS.length]} ${WORDS[(i * 7 + 3) % WORDS.length]}`;
+    return {
+      name: `report${i + 1}`,
+      summary: `Report ${i + 1}: ${topic} by ${["day", "week", "month", "region", "team"][i % 5]}`,
+      inputSchema: obj({ from: { type: "string" }, to: { type: "string" }, limit: { type: "integer" } }),
+      handler: () => ({ report: i + 1, rows: [] }),
+    };
+  });
+  return new FunctionProvider("reports", ops, `${count} analytics reports`);
+}
+
 /** Every episode gets a fresh world so writes from one run cannot leak into the next. */
-export function buildWorld(): { onetool: OneTool; pets: Pet[]; deletions: number[] } {
+export function buildWorld(options: WorldOptions = {}): { onetool: OneTool; pets: Pet[]; deletions: number[] } {
   const pets = PETS.map((p) => ({ ...p }));
   const deletions: number[] = [];
   const petstore = new FunctionProvider(
@@ -90,10 +112,12 @@ export function buildWorld(): { onetool: OneTool; pets: Pet[]; deletions: number
     ],
     "Warehouse stock per pet",
   );
+  const providers = options.padding ? [petstore, inventory, paddingProvider(options.padding)] : [petstore, inventory];
   const onetool = new OneTool({
-    providers: [petstore, inventory],
+    providers,
     title: "the pet store and its warehouse",
     policy: { deny: ["petstore:deletePet"], onNoConfirm: "deny" },
+    inlineCatalog: options.inlineCatalog ? { maxChars: 12000 } : false,
   });
   return { onetool, pets, deletions };
 }

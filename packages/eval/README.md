@@ -7,11 +7,15 @@ and records success, model calls, tool calls, schema-feedback events and token u
 
 ```sh
 pnpm run build
-AWS_PROFILE=<profile> pnpm --filter @o6lvl4/onetool-eval run eval -- --trials 3
-pnpm --filter @o6lvl4/onetool-eval run eval -- --tasks count-sold,typed-id --conditions onetool
+pnpm --filter @o6lvl4/onetool-eval run eval -- --trials 3                       # Claude Code headless, all tasks, onetool vs flat
+pnpm --filter @o6lvl4/onetool-eval run eval -- --conditions onetool-inline      # the default onetool layout (catalog in the call tool)
+pnpm --filter @o6lvl4/onetool-eval run eval -- --padding 200 --trials 1         # add 200 synthetic operations
+AWS_PROFILE=<profile> pnpm --filter @o6lvl4/onetool-eval run eval -- --driver bedrock
 ```
 
-The driver talks to Amazon Bedrock Converse; `ONETOOL_EVAL_MODEL` or `--model` picks the model.
+Layouts: `flat` (one tool per operation), `onetool` (four tools, bare descriptions), `onetool-inline` (four tools with the operation index in the call tool, the library default).
+The default driver runs Claude Code in headless mode (`claude -p`) with built-in tools off and our own system prompt, so it needs a logged-in Claude Code and nothing else;
+`--driver bedrock` uses Amazon Bedrock Converse. `ONETOOL_EVAL_MODEL` or `--model` picks the model.
 Results land in `results/<timestamp>.json` with every call trace, and a Markdown summary prints at the end.
-`first-call input tok` is the input token count of the first model call: system prompt, task prompt and tool definitions,
-so the difference between conditions is the cost of the tool definitions themselves.
+`input tok` is the total input over every turn of an episode (for Claude Code: fresh, cache-creation and cache-read tokens together),
+so it measures how much context the layout makes the model carry.

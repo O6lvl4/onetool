@@ -23,6 +23,7 @@ Options (OpenAPI mode):
 Options (both modes):
   --policy <file.json>   PolicyConfig (allow / confirm / deny / sensitive patterns, mode, onNoConfirm)
   --strict               shorthand for policy mode "strict"
+  --no-inline-catalog    leave the operation index out of the call tool's description (it is included by default)
   --prefix <name>        tool name prefix (default "api")
   --name <name>          MCP server name
 
@@ -38,6 +39,7 @@ interface Args {
   namespace?: string;
   policy?: string;
   strict: boolean;
+  noInlineCatalog: boolean;
   prefix?: string;
   name?: string;
   help: boolean;
@@ -75,12 +77,13 @@ const VALUED: Record<string, Setter> = {
 
 const FLAGS: Record<string, (args: Args) => void> = {
   "--strict": (a) => (a.strict = true),
+  "--no-inline-catalog": (a) => (a.noInlineCatalog = true),
   "--help": (a) => (a.help = true),
   "-h": (a) => (a.help = true),
 };
 
 export function parseArgs(argv: readonly string[]): Args {
-  const args: Args = { headers: {}, upstreams: [], strict: false, help: false };
+  const args: Args = { headers: {}, upstreams: [], strict: false, noInlineCatalog: false, help: false };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i] as string;
     const flag = FLAGS[token];
@@ -138,7 +141,7 @@ async function optionsFromConfig(path: string): Promise<OneToolOptions> {
 async function applyOverrides(options: OneToolOptions, args: Args): Promise<OneToolOptions> {
   const policy: PolicyConfig | undefined = args.policy ? ((await loadJson(args.policy)) as PolicyConfig) : options.policy;
   const withMode = args.strict ? { ...(policy ?? {}), mode: "strict" as const } : policy;
-  return { ...options, ...(withMode ? { policy: withMode } : {}), ...(args.prefix ? { prefix: args.prefix } : {}) };
+  return { ...options, ...(withMode ? { policy: withMode } : {}), ...(args.prefix ? { prefix: args.prefix } : {}), ...(args.noInlineCatalog ? { inlineCatalog: false } : {}) };
 }
 
 export async function buildOptions(args: Args): Promise<OneToolOptions> {
