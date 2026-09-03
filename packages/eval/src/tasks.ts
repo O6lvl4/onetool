@@ -104,7 +104,7 @@ const says = (trace: Trace, ...words: string[]) => words.every((w) => trace.fina
 export const TASKS: Task[] = [
   {
     id: "count-sold",
-    prompt: "How many pets are sold? Answer with the number.",
+    prompt: "How many pets have the status \"sold\"? Answer with the number.",
     probes: "one read call with a filter",
     check: (t) => says(t, "2") && called(t, "listPets"),
   },

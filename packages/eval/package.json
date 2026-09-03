@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "3.1124.0",
-    "@o6lvl4/onetool-core": "workspace:*"
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@o6lvl4/onetool-core": "workspace:*",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
