@@ -1,0 +1,222 @@
+{
+  "driver": "claude-code",
+  "model": "claude-haiku-4-5-20251001",
+  "trials": 1,
+  "padding": 37,
+  "system": "You are an assistant that answers questions about a pet store using the tools available. Use tools rather than guessing. When a tool refuses an action, say so plainly. Answer in one or two short sentences.",
+  "durationMs": 40493,
+  "tasks": [
+    {
+      "id": "count-sold",
+      "prompt": "How many pets have the status \"sold\"? Answer with the number.",
+      "probes": "one read call with a filter"
+    },
+    {
+      "id": "cross-namespace",
+      "prompt": "Is Bolt in stock? How many units?",
+      "probes": "two namespaces: find the id in one, look up stock in the other"
+    },
+    {
+      "id": "denied-write",
+      "prompt": "Delete the pet with id 1.",
+      "probes": "policy denies; the model must report that instead of pretending"
+    }
+  ],
+  "records": [
+    {
+      "task": "count-sold",
+      "condition": "flat",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 2,
+      "toolCalls": 1,
+      "validateFailures": 0,
+      "inputTokens": 12625,
+      "outputTokens": 238,
+      "costUsd": 0.0156404,
+      "finalText": "2",
+      "calls": [
+        {
+          "name": "petstore__listPets",
+          "input": {
+            "status": "sold"
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "count-sold",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 10486,
+      "outputTokens": 387,
+      "costUsd": 0.013375,
+      "finalText": "2",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "listPets",
+            "input": {
+              "status": "sold"
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "cross-namespace",
+      "condition": "flat",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 3,
+      "toolCalls": 2,
+      "validateFailures": 0,
+      "inputTokens": 19094,
+      "outputTokens": 282,
+      "costUsd": 0.008348099999999999,
+      "finalText": "Yes, Bolt is in stock with **1 unit** available.",
+      "calls": [
+        {
+          "name": "petstore__searchPets",
+          "input": {
+            "query": "Bolt"
+          },
+          "isError": false
+        },
+        {
+          "name": "inventory__getStock",
+          "input": {
+            "petId": 3
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "cross-namespace",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 5,
+      "toolCalls": 4,
+      "validateFailures": 1,
+      "inputTokens": 18641,
+      "outputTokens": 614,
+      "costUsd": 0.026825,
+      "finalText": "Yes, Bolt is in stock with **1 unit** available.",
+      "calls": [
+        {
+          "name": "api_call",
+          "input": {
+            "operation": "searchPets",
+            "input": {
+              "name": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "resolve"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "name": "Bolt"
+            }
+          },
+          "isError": true,
+          "stage": "validate"
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "petstore",
+            "operation": "searchPets",
+            "input": {
+              "query": "Bolt"
+            }
+          },
+          "isError": false
+        },
+        {
+          "name": "api_call",
+          "input": {
+            "namespace": "inventory",
+            "operation": "getStock",
+            "input": {
+              "petId": 3
+            }
+          },
+          "isError": false
+        }
+      ]
+    },
+    {
+      "task": "denied-write",
+      "condition": "flat",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 2,
+      "toolCalls": 1,
+      "validateFailures": 0,
+      "inputTokens": 12572,
+      "outputTokens": 175,
+      "costUsd": 0.0068857,
+      "finalText": "I cannot delete the pet with id 1 — the deletion action was denied by policy.",
+      "calls": [
+        {
+          "name": "petstore__deletePet",
+          "input": {
+            "id": 1
+          },
+          "isError": true,
+          "stage": "policy"
+        }
+      ]
+    },
+    {
+      "task": "denied-write",
+      "condition": "onetool-inline",
+      "trial": 1,
+      "success": true,
+      "modelCalls": 2,
+      "toolCalls": 1,
+      "validateFailures": 0,
+      "inputTokens": 6760,
+      "outputTokens": 232,
+      "costUsd": 0.008877,
+      "finalText": "I cannot delete the pet with id 1 because the deletePet operation is denied by policy. The system does not allow pet deletion through this interface.",
+      "calls": [
+        {
+          "name": "api_describe",
+          "input": {
+            "operation": "deletePet",
+            "namespace": "petstore"
+          },
+          "isError": false
+        }
+      ]
+    }
+  ],
+  "table": "| task | condition | success | model turns | tool calls | validate fails | input tok | output tok | cost USD |\n|---|---|---|---|---|---|---|---|---|\n| count-sold | flat | 1/1 | 2.0 | 1.0 | 0.0 | 12,625 | 238 | 0.0156 |\n| count-sold | onetool-inline | 1/1 | 3.0 | 2.0 | 0.0 | 10,486 | 387 | 0.0134 |\n| cross-namespace | flat | 1/1 | 3.0 | 2.0 | 0.0 | 19,094 | 282 | 0.0083 |\n| cross-namespace | onetool-inline | 1/1 | 5.0 | 4.0 | 1.0 | 18,641 | 614 | 0.0268 |\n| denied-write | flat | 1/1 | 2.0 | 1.0 | 0.0 | 12,572 | 175 | 0.0069 |\n| denied-write | onetool-inline | 1/1 | 2.0 | 1.0 | 0.0 | 6,760 | 232 | 0.0089 |\n| all | flat | 3/3 | 2.3 | 1.3 | 0.0 | 14,764 | 232 | 0.0103 |\n| all | onetool-inline | 3/3 | 3.3 | 2.3 | 0.3 | 11,962 | 411 | 0.0164 |"
+}

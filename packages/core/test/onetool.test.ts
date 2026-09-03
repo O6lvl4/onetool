@@ -194,7 +194,15 @@ describe("OneTool consent with edited input", () => {
   it("hands the consent port the input schema", async () => {
     const tool = new OneTool({ providers: [petstore()] });
     let seen: unknown;
-    await tool.call({ operation: "createPet", input: { name: "Tom" } }, { confirm: async (req) => ((seen = req.inputSchema), "declined") });
+    await tool.call(
+      { operation: "createPet", input: { name: "Tom" } },
+      {
+        confirm: async (req) => {
+          seen = req.inputSchema;
+          return "declined";
+        },
+      },
+    );
     expect(seen).toMatchObject({ required: ["name"] });
   });
 });

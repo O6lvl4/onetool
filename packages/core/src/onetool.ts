@@ -3,7 +3,7 @@ import { Policy, type PolicyConfig } from "./policy.js";
 import { buildIndex, matchesQuery, pickNamespace, ResolveError, resolveOperation, type NamespaceEntry, type Resolved } from "./resolve.js";
 import { DEFAULT_REDACT_KEYS, materialize, redact, shrink, type ResponseOptions } from "./response.js";
 import { isPlainObject, validate } from "./schema.js";
-import { flatToolName, flatToolSpec } from "./flat.js";
+import { catalogText, effectiveLayout, flatNames, flatSpecs, genericSpecs, type ResolvedTools, type SurfaceOptions } from "./surface.js";
 import { buildToolSpecs, dispatchTool } from "./tools.js";
 import {
   InputValidationError,
@@ -52,10 +52,7 @@ export interface OneToolOptions {
   onEvent?: (event: CallEvent) => void;
 }
 
-export interface ResolvedTools {
-  layout: "generic" | "flat";
-  specs: ToolSpec[];
-}
+export type { ResolvedTools } from "./surface.js";
 
 export interface DescribeResult {
   spec: OperationSpec;
@@ -99,12 +96,10 @@ export class OneTool {
   private readonly redactKeys: readonly string[];
   private readonly redactExtra: ((value: unknown) => unknown) | undefined;
   private readonly title: string;
-  private readonly catalogChars: number;
-  private readonly layout: Layout;
-  private readonly autoThreshold: number;
+  private readonly surface: SurfaceOptions;
   private readonly onEvent: ((event: CallEvent) => void) | undefined;
   private index: Map<string, NamespaceEntry> | undefined;
-  private flatIndex: Map<string, OperationRef> | undefined;
+  private flatIndex: Promise<Map<string, OperationRef>> | undefined;
 
   constructor(options: OneToolOptions) {
     this.providers = options.providers;
@@ -112,9 +107,7 @@ export class OneTool {
     this.confirmDefault = options.confirm;
     this.prefix = options.prefix ?? "api";
     this.title = options.title ?? "the configured APIs";
-    this.catalogChars = catalogBudget(options.inlineCatalog);
-    this.layout = options.layout ?? "auto";
-    this.autoThreshold = options.autoThreshold ?? DEFAULT_AUTO_THRESHOLD;
+    this.surface = { layout: options.layout ?? "auto", autoThreshold: options.autoThreshold ?? DEFAULT_AUTO_THRESHOLD, catalogChars: catalogBudget(options.inlineCatalog) };
     this.onEvent = options.onEvent;
     this.resultLimit = options.response?.resultLimit ?? DEFAULT_RESULT_LIMIT;
     this.bodyLimit = options.response?.bodyLimit ?? DEFAULT_BODY_LIMIT;
@@ -247,67 +240,14 @@ export class OneTool {
 
   /** The tools to register, in the configured layout, with the inline catalog when it applies. */
   async tools(): Promise<ResolvedTools> {
-    const layout = await this.effectiveLayout();
-    if (layout === "flat") return { layout, specs: await this.flatSpecs() };
-    return { layout, specs: await this.genericSpecs() };
+    const layout = await effectiveLayout(this, this.surface);
+    if (layout === "flat") return { layout, specs: await flatSpecs(this, await this.flatNames()) };
+    return { layout, specs: await genericSpecs(this, this.surface.catalogChars) };
   }
 
-  private async effectiveLayout(): Promise<"generic" | "flat"> {
-    if (this.layout !== "auto") return this.layout;
-    let count = 0;
-    for (const ns of await this.services()) count += (await this.operations(ns.name)).length;
-    return count <= this.autoThreshold ? "flat" : "generic";
-  }
-
-  private async genericSpecs(): Promise<ToolSpec[]> {
-    const specs = this.toolSpecs();
-    if (this.catalogChars <= 0) return specs;
-    const catalog = await this.catalogText(this.catalogChars);
-    return specs.map((spec) => (spec.name === `${this.prefix}_call` ? { ...spec, description: withCatalog(spec.description, catalog) } : spec));
-  }
-
-  private async flatSpecs(): Promise<ToolSpec[]> {
-    const specs: ToolSpec[] = [];
-    for (const [name, ref] of await this.flatNames()) {
-      const { spec, kind } = await this.describe(ref.namespace, ref.name);
-      specs.push(flatToolSpec(name, { ...spec, kind }));
-    }
-    return specs;
-  }
-
-  /** Flat tool name → operation. Built once; a clash after sanitising gets a numeric suffix. */
-  private async flatNames(): Promise<Map<string, OperationRef>> {
-    if (this.flatIndex) return this.flatIndex;
-    const index = new Map<string, OperationRef>();
-    for (const ns of await this.services()) {
-      for (const op of await this.operations(ns.name)) {
-        const ref = { namespace: ns.name, name: op.name };
-        let name = flatToolName(ref);
-        for (let n = 2; index.has(name); n++) name = `${flatToolName(ref).slice(0, 60)}_${n}`;
-        index.set(name, ref);
-      }
-    }
-    this.flatIndex = index;
-    return index;
-  }
-
-  /** One line per namespace: `namespace: op — summary; op — summary`, cut at `maxChars` with a pointer to the list tool. */
-  async catalogText(maxChars: number): Promise<string> {
-    const lines: string[] = [];
-    let omitted = 0;
-    let used = 0;
-    for (const ns of await this.services()) {
-      const entries = (await this.operations(ns.name)).map((op) => `${op.name} — ${op.summary}`);
-      const line = `${ns.name}: ${entries.join("; ")}`;
-      if (used + line.length + 1 > maxChars) {
-        omitted += entries.length;
-        continue;
-      }
-      lines.push(line);
-      used += line.length + 1;
-    }
-    if (omitted > 0) lines.push(`(${omitted} more operations; use ${this.prefix}_operations to list them)`);
-    return lines.join("\n");
+  /** The operation index as it is folded into the call tool's description. */
+  catalogText(maxChars: number): Promise<string> {
+    return catalogText(this, maxChars);
   }
 
   /** Route a tool invocation by name, generic or flat. Adapters register `tools()` and forward calls here. */
@@ -326,6 +266,11 @@ export class OneTool {
     return this.policy.isSensitive(ref) ? "sensitive" : classify(op);
   }
 
+  private flatNames(): Promise<Map<string, OperationRef>> {
+    this.flatIndex ??= flatNames(this);
+    return this.flatIndex;
+  }
+
   private async namespaces(): Promise<Map<string, NamespaceEntry>> {
     this.index ??= await buildIndex(this.providers);
     return this.index;
@@ -342,6 +287,3 @@ function catalogBudget(option: OneToolOptions["inlineCatalog"]): number {
   return option.maxChars ?? DEFAULT_CATALOG_CHARS;
 }
 
-function withCatalog(description: string, catalog: string): string {
-  return `${description} Call directly when you know the operation: an unknown name returns candidates and invalid input returns the schema, so calling first is usually faster than listing or describing.\nOperations (namespace: name — summary):\n${catalog}`;
-}

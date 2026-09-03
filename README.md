@@ -113,7 +113,16 @@ The picture flips as the catalog grows. With 200 synthetic read operations added
 
 Every turn of the flat layout carries all 213 definitions (roughly 35,000 tokens); the four generic tools stay the same size, and the inline index is bounded. Claude Code did not defer or search the 213 MCP tools in this run, so the flat cost is the real cost of a big tool list on this host.
 
-What this says about when to use which layout: below a few dozen operations, one tool per operation is cheaper; above that, the four generic tools pay for themselves, and the inline catalog is worth its tokens at every size tested. onetool therefore offers both surfaces over the same policy, consent and redaction (`layout: "generic" | "flat" | "auto"`), and `auto`, the default, serves the flat layout up to 30 operations and the generic one beyond. The threshold sits between the two measured points and has not been measured itself. Raw traces for every episode are in [`packages/eval/results/`](packages/eval/results/); rerun with `pnpm --filter @o6lvl4/onetool-eval run eval`.
+Where the two layouts cross, on the same three tasks (`count-sold`, `cross-namespace`, `denied-write`; one trial per cell except the 13-operation row, which averages three):
+
+| operations | `flat` input tokens | `onetool-inline` input tokens |
+|---|---|---|
+| 13 | 7,144 | 12,082 |
+| 20 | 8,607 | 10,749 |
+| 50 | 14,764 | 11,962 |
+| 213 | 48,237 | 11,930 |
+
+The flat layout's cost grows with the catalog; the generic layout's stays flat. On this host and model the crossover lies between 20 and 50 operations. onetool therefore offers both surfaces over the same policy, consent and redaction (`layout: "generic" | "flat" | "auto"`), and `auto`, the default, serves the flat layout up to 30 operations and the generic one beyond. Raw traces for every episode are in [`packages/eval/results/`](packages/eval/results/); rerun with `pnpm --filter @o6lvl4/onetool-eval run eval`.
 
 ## Policy
 
