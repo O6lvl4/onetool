@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { OneTool, type OneToolOptions, type PolicyConfig } from "@o6lvl4/onetool-core";
+import { OneTool, type Layout, type OneToolOptions, type PolicyConfig } from "@o6lvl4/onetool-core";
 import { McpProvider, type McpUpstream } from "@o6lvl4/onetool-provider-mcp";
 import { OpenApiProvider, type OpenApiDocument } from "@o6lvl4/onetool-provider-openapi";
 import { createOneToolServer, VERSION } from "./index.js";
@@ -23,6 +23,7 @@ Options (OpenAPI mode):
 Options (both modes):
   --policy <file.json>   PolicyConfig (allow / confirm / deny / sensitive patterns, mode, onNoConfirm)
   --strict               shorthand for policy mode "strict"
+  --layout <l>           generic (four tools), flat (one tool per operation) or auto (default: flat up to 30 operations)
   --no-inline-catalog    leave the operation index out of the call tool's description (it is included by default)
   --prefix <name>        tool name prefix (default "api")
   --name <name>          MCP server name
@@ -40,6 +41,7 @@ interface Args {
   policy?: string;
   strict: boolean;
   noInlineCatalog: boolean;
+  layout?: Layout;
   prefix?: string;
   name?: string;
   help: boolean;
@@ -55,6 +57,10 @@ const VALUED: Record<string, Setter> = {
   "--policy": (a, v) => (a.policy = v),
   "--prefix": (a, v) => (a.prefix = v),
   "--name": (a, v) => (a.name = v),
+  "--layout": (a, v) => {
+    if (v !== "generic" && v !== "flat" && v !== "auto") throw new Error(`--layout expects generic, flat or auto, got "${v}"`);
+    a.layout = v;
+  },
   "--upstream": (a, v) => {
     const eq = v.indexOf("=");
     if (eq < 0) throw new Error(`--upstream expects "name=command args" or "name=url", got "${v}"`);
@@ -141,7 +147,13 @@ async function optionsFromConfig(path: string): Promise<OneToolOptions> {
 async function applyOverrides(options: OneToolOptions, args: Args): Promise<OneToolOptions> {
   const policy: PolicyConfig | undefined = args.policy ? ((await loadJson(args.policy)) as PolicyConfig) : options.policy;
   const withMode = args.strict ? { ...(policy ?? {}), mode: "strict" as const } : policy;
-  return { ...options, ...(withMode ? { policy: withMode } : {}), ...(args.prefix ? { prefix: args.prefix } : {}), ...(args.noInlineCatalog ? { inlineCatalog: false } : {}) };
+  return {
+    ...options,
+    ...(withMode ? { policy: withMode } : {}),
+    ...(args.prefix ? { prefix: args.prefix } : {}),
+    ...(args.layout ? { layout: args.layout } : {}),
+    ...(args.noInlineCatalog ? { inlineCatalog: false } : {}),
+  };
 }
 
 export async function buildOptions(args: Args): Promise<OneToolOptions> {
@@ -164,7 +176,8 @@ async function main(): Promise<void> {
   const server = createOneToolServer(onetool, { ...(args.name ? { name: args.name } : {}) });
   await server.connect(new StdioServerTransport());
   const names = (await onetool.services()).map((n) => n.name).join(", ");
-  process.stderr.write(`onetool-mcp: serving ${onetool.toolSpecs().map((t) => t.name).join(", ")} for namespace(s) ${names}\n`);
+  const { layout, specs } = await onetool.tools();
+  process.stderr.write(`onetool-mcp: ${layout} layout, ${specs.length} tool(s) for namespace(s) ${names}\n`);
 }
 
 main().catch((error: unknown) => {

@@ -26,17 +26,19 @@ function fixture() {
       },
     },
   ]);
-  return { calls, onetool: new OneTool({ providers: [provider], title: "the pet store" }) };
+  return { calls, onetool: new OneTool({ providers: [provider], title: "the pet store", layout: "generic" }) };
 }
 
-async function connect(onetool: OneTool, elicitation?: (message: string) => { action: "accept" | "decline" | "cancel"; content?: Record<string, unknown> }) {
+type Elicitation = (message: string, schema: unknown) => { action: "accept" | "decline" | "cancel"; content?: Record<string, unknown> };
+
+async function connect(onetool: OneTool, elicitation?: Elicitation) {
   const server = createOneToolServer(onetool);
   const client = new Client({ name: "test-client", version: "0.0.0" }, elicitation ? { capabilities: { elicitation: {} } } : {});
   const prompts: string[] = [];
   if (elicitation) {
     client.setRequestHandler(ElicitRequestSchema, async (request) => {
       prompts.push(request.params.message);
-      return elicitation(request.params.message);
+      return elicitation(request.params.message, "requestedSchema" in request.params ? request.params.requestedSchema : undefined);
     });
   }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -95,6 +97,34 @@ describe("onetool MCP server", () => {
     const refused = await declined.client.callTool({ name: "api_call", arguments: { operation: "createPet", input: { name: "Tom" } } });
     expect(refused.isError).toBe(true);
     expect(JSON.parse(text(refused))).toMatchObject({ stage: "confirm" });
+  });
+
+  it("offers the scalar input fields for editing and runs with the corrected value", async () => {
+    const { onetool, calls } = fixture();
+    let schema: unknown;
+    const { client } = await connect(onetool, (_message, requested) => {
+      schema = requested;
+      return { action: "accept", content: { approve: true, name: "Tim" } };
+    });
+    const created = await client.callTool({ name: "api_call", arguments: { operation: "createPet", input: { name: "Tom" } } });
+    expect(JSON.parse(text(created))).toEqual({ id: 2, name: "Tim" });
+    expect(schema).toMatchObject({ properties: { approve: { type: "boolean", default: true }, name: { type: "string", default: "Tom" } }, required: ["approve"] });
+    expect(calls).toEqual(["createPet"]);
+  });
+
+  it("serves the flat layout for a small catalog when the layout is auto", async () => {
+    const auto = new OneTool({
+      providers: [new FunctionProvider("petstore", [{ name: "listPets", handler: () => [{ id: 1 }] }, { name: "createPet", handler: () => ({ id: 2 }) }])],
+    });
+    const { client } = await connect(auto);
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name)).toEqual(["petstore__listPets", "petstore__createPet"]);
+    expect(tools[0]?.annotations).toMatchObject({ readOnlyHint: true });
+    expect(tools[1]?.annotations).toMatchObject({ destructiveHint: true });
+    const listed = await client.callTool({ name: "petstore__listPets", arguments: {} });
+    expect(JSON.parse(text(listed))).toEqual([{ id: 1 }]);
+    const refused = await client.callTool({ name: "petstore__createPet", arguments: {} });
+    expect(refused.isError).toBe(true);
   });
 
   it("fails closed when the client cannot elicit", async () => {

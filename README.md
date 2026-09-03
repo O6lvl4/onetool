@@ -28,7 +28,7 @@ LLM ──toolUse──▶ MCP client ──▶ onetool-mcp ──▶ OneTool �
                     (ask the human)            redact / shrink
 ```
 
-The four tools, with the default `api` prefix:
+Two layouts share that pipeline. `flat` registers one tool per operation (`petstore__listPets`), which the measurements below show is cheaper for small catalogs; `generic` registers four tools that stay the same size however many operations sit behind them. The default `auto` picks flat up to 30 operations. The four generic tools, with the default `api` prefix:
 
 - `api_services` lists namespaces.
 - `api_operations` lists the operations of a namespace with a summary, a kind (`read`, `write`, `sensitive`) and the policy verdict (`allow`, `confirm`, `deny`).
@@ -65,7 +65,7 @@ export default {
 ```
 
 ```sh
-node packages/mcp/dist/cli.js onetool.config.mjs          # MCP over stdio
+node packages/mcp/dist/cli.js onetool.config.mjs          # MCP over stdio; add --layout generic|flat|auto to override
 claude mcp add petstore -- node /path/to/onetool/packages/mcp/dist/cli.js /path/to/onetool.config.mjs
 ```
 
@@ -113,7 +113,7 @@ The picture flips as the catalog grows. With 200 synthetic read operations added
 
 Every turn of the flat layout carries all 213 definitions (roughly 35,000 tokens); the four generic tools stay the same size, and the inline index is bounded. Claude Code did not defer or search the 213 MCP tools in this run, so the flat cost is the real cost of a big tool list on this host.
 
-What this says about when to use onetool: below a few dozen operations, prefer plain tools unless you want the policy layer; above that, the four tools pay for themselves, and the inline catalog is worth its tokens at every size tested. Raw traces for every episode are in [`packages/eval/results/`](packages/eval/results/); rerun with `pnpm --filter @o6lvl4/onetool-eval run eval`.
+What this says about when to use which layout: below a few dozen operations, one tool per operation is cheaper; above that, the four generic tools pay for themselves, and the inline catalog is worth its tokens at every size tested. onetool therefore offers both surfaces over the same policy, consent and redaction (`layout: "generic" | "flat" | "auto"`), and `auto`, the default, serves the flat layout up to 30 operations and the generic one beyond. The threshold sits between the two measured points and has not been measured itself. Raw traces for every episode are in [`packages/eval/results/`](packages/eval/results/); rerun with `pnpm --filter @o6lvl4/onetool-eval run eval`.
 
 ## Policy
 
@@ -136,9 +136,9 @@ The kind of an operation comes from the policy's `sensitive` list first, then fr
 
 ## Consent
 
-`OneTool` does not know how a human is asked. It calls a `ConfirmFn` before a write or sensitive operation and expects `approved`, `declined` or `unavailable`.
+`OneTool` does not know how a human is asked. It calls a `ConfirmFn` before a write or sensitive operation and expects `approved`, `declined`, `unavailable`, or `{ approved: true, input }` when the person changed the input.
 
-The MCP adapter answers through elicitation when the client supports it and returns `unavailable` otherwise, which hands the decision to `onNoConfirm`. A terminal wrapper can pass a readline prompt; a chat UI can pass a button. The tool itself does not change.
+The MCP adapter answers through elicitation when the client supports it and returns `unavailable` otherwise, which hands the decision to `onNoConfirm`. The elicitation form carries an approve switch and every top-level scalar field of the input, prefilled, so the person can correct a value before approving; an edited input is validated again before the call runs. A terminal wrapper can pass a readline prompt; a chat UI can pass a button. The tool itself does not change.
 
 ```ts
 import { OneTool } from "@o6lvl4/onetool-core";
@@ -174,13 +174,13 @@ Throw `InputValidationError` when the remote side rejected the input and onetool
 | `@o6lvl4/onetool-eval` (private) | Harness comparing the four generic tools with one tool per operation on a real model ([README](packages/eval/README.md)) | core, Bedrock runtime |
 | `@o6lvl4/onetool-mcp` | `createOneToolServer` (low-level `Server` plus elicitation) and the `onetool-mcp` CLI | core, both providers, MCP SDK |
 
-`ToolSpec` has the shape that Bedrock Converse, the Anthropic API and OpenAI function calling all share, so an adapter for any of them registers `toolSpecs()` and forwards calls to `handleTool()`. The three catalog tools declare an `outputSchema`; the MCP adapter returns every successful result as `structuredContent` as well as text (plain objects as they are, anything else wrapped as `{ result }`), and the MCP client validates it against the declared schema.
+`ToolSpec` has the shape that Bedrock Converse, the Anthropic API and OpenAI function calling all share, so an adapter for any of them registers what `tools()` returns (the layout's specs) and forwards calls to `handleTool()`, which routes both generic and flat names. The three catalog tools declare an `outputSchema`; the MCP adapter returns every successful result as `structuredContent` as well as text (plain objects as they are, anything else wrapped as `{ result }`), and the MCP client validates it against the declared schema.
 
 ## Development
 
 ```sh
 pnpm install
-pnpm run check   # build, test (core 30, openapi 9, mcp-provider 4, mcp 8), then the quality gate
+pnpm run check   # build, test (core 35, openapi 9, mcp-provider 4, mcp 10), then the quality gate
 ```
 
 `pnpm run quality` runs [codopsy](https://github.com/O6lvl4/codopsy) over `packages/` and fails when the score drops below the committed `.codopsy-baseline.json`. The current score is A (100/100) with no open findings; keep it there.

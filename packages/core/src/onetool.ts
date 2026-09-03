@@ -3,6 +3,7 @@ import { Policy, type PolicyConfig } from "./policy.js";
 import { buildIndex, matchesQuery, pickNamespace, ResolveError, resolveOperation, type NamespaceEntry, type Resolved } from "./resolve.js";
 import { DEFAULT_REDACT_KEYS, materialize, redact, shrink, type ResponseOptions } from "./response.js";
 import { isPlainObject, validate } from "./schema.js";
+import { flatToolName, flatToolSpec } from "./flat.js";
 import { buildToolSpecs, dispatchTool } from "./tools.js";
 import {
   InputValidationError,
@@ -13,6 +14,7 @@ import {
   type CallResult,
   type ConfirmFn,
   type Kind,
+  type Layout,
   type NamespaceInfo,
   type OperationRef,
   type OperationSpec,
@@ -40,7 +42,19 @@ export interface OneToolOptions {
    * index (default 4000); pass `false` to leave the call tool's description bare.
    */
   inlineCatalog?: boolean | { maxChars?: number };
+  /**
+   * `generic` is the four-tool surface, `flat` is one tool per operation behind the same policy,
+   * `auto` (default) picks flat while the catalog has at most `autoThreshold` operations.
+   */
+  layout?: Layout;
+  /** Operation count up to which `auto` chooses `flat`. Default 30. */
+  autoThreshold?: number;
   onEvent?: (event: CallEvent) => void;
+}
+
+export interface ResolvedTools {
+  layout: "generic" | "flat";
+  specs: ToolSpec[];
 }
 
 export interface DescribeResult {
@@ -66,6 +80,7 @@ interface Gated {
 type Failure = Extract<CallResult, { ok: false }>;
 
 const DEFAULT_CATALOG_CHARS = 4000;
+const DEFAULT_AUTO_THRESHOLD = 30;
 const DEFAULT_RESULT_LIMIT = 32 * 1024;
 const DEFAULT_BODY_LIMIT = 64 * 1024;
 
@@ -85,8 +100,11 @@ export class OneTool {
   private readonly redactExtra: ((value: unknown) => unknown) | undefined;
   private readonly title: string;
   private readonly catalogChars: number;
+  private readonly layout: Layout;
+  private readonly autoThreshold: number;
   private readonly onEvent: ((event: CallEvent) => void) | undefined;
   private index: Map<string, NamespaceEntry> | undefined;
+  private flatIndex: Map<string, OperationRef> | undefined;
 
   constructor(options: OneToolOptions) {
     this.providers = options.providers;
@@ -95,6 +113,8 @@ export class OneTool {
     this.prefix = options.prefix ?? "api";
     this.title = options.title ?? "the configured APIs";
     this.catalogChars = catalogBudget(options.inlineCatalog);
+    this.layout = options.layout ?? "auto";
+    this.autoThreshold = options.autoThreshold ?? DEFAULT_AUTO_THRESHOLD;
     this.onEvent = options.onEvent;
     this.resultLimit = options.response?.resultLimit ?? DEFAULT_RESULT_LIMIT;
     this.bodyLimit = options.response?.bodyLimit ?? DEFAULT_BODY_LIMIT;
@@ -148,9 +168,9 @@ export class OneTool {
     }
     const gated = this.gate(resolved, request.input ?? {});
     if ("ok" in gated) return gated;
-    const refused = await this.consent(gated, ctx);
-    if (refused) return refused;
-    return this.execute(gated, ctx);
+    const consented = await this.consent(gated, ctx);
+    if ("ok" in consented) return consented;
+    return this.execute(consented, ctx);
   }
 
   /** Policy decision and input validation. Nothing here touches the provider. */
@@ -166,16 +186,26 @@ export class OneTool {
     return { ...base, reason, spec, provider, input };
   }
 
-  /** Ask the consent port when the verdict is `confirm`. Returns a failure when the call must not proceed. */
-  private async consent(gated: Gated, ctx: CallContext): Promise<Failure | undefined> {
-    if (gated.verdict !== "confirm") return undefined;
+  /**
+   * Ask the consent port when the verdict is `confirm`. The human may approve as is, approve with an
+   * edited input (validated again here), decline, or be unreachable, in which case `onNoConfirm` decides.
+   */
+  private async consent(gated: Gated, ctx: CallContext): Promise<Gated | Failure> {
+    if (gated.verdict !== "confirm") return gated;
     const { ref, kind, verdict, reason, spec, input } = gated;
     const confirm = ctx.confirm ?? this.confirmDefault;
-    const outcome = confirm ? await confirm({ ref, kind, verdictReason: reason, summary: spec.summary, input }) : "unavailable";
-    if (outcome === "approved") return undefined;
-    if (outcome === "unavailable" && this.policy.onNoConfirm === "allow") return undefined;
+    const decision = confirm ? await confirm({ ref, kind, verdictReason: reason, summary: spec.summary, input, inputSchema: spec.inputSchema }) : "unavailable";
+    if (decision === "approved") return gated;
+    if (typeof decision === "object") {
+      const problems = validate(spec.inputSchema, decision.input);
+      if (problems.length > 0) {
+        return { ok: false, stage: "validate", error: `edited input rejected:\n${problems.join("\n")}`, schema: spec.inputSchema, ref, kind, verdict };
+      }
+      return { ...gated, input: decision.input };
+    }
+    if (decision === "unavailable" && this.policy.onNoConfirm === "allow") return gated;
     const error =
-      outcome === "declined"
+      decision === "declined"
         ? `${ref.namespace}:${ref.name} was not approved by the user`
         : `${ref.namespace}:${ref.name} requires confirmation (${reason}) but no one can be asked in this session`;
     return { ok: false, stage: "confirm", error, ref, kind, verdict };
@@ -210,16 +240,55 @@ export class OneTool {
 
   // ---- tool surface --------------------------------------------------------------------
 
+  /** The generic four-tool surface without the catalog. Synchronous; adapters that can wait should call `tools()`. */
   toolSpecs(): ToolSpec[] {
     return buildToolSpecs(this.prefix, this.title);
   }
 
-  /** `toolSpecs()` plus the inline catalog when it is enabled. Adapters that can wait should use this one. */
-  async toolSpecsWithCatalog(): Promise<ToolSpec[]> {
+  /** The tools to register, in the configured layout, with the inline catalog when it applies. */
+  async tools(): Promise<ResolvedTools> {
+    const layout = await this.effectiveLayout();
+    if (layout === "flat") return { layout, specs: await this.flatSpecs() };
+    return { layout, specs: await this.genericSpecs() };
+  }
+
+  private async effectiveLayout(): Promise<"generic" | "flat"> {
+    if (this.layout !== "auto") return this.layout;
+    let count = 0;
+    for (const ns of await this.services()) count += (await this.operations(ns.name)).length;
+    return count <= this.autoThreshold ? "flat" : "generic";
+  }
+
+  private async genericSpecs(): Promise<ToolSpec[]> {
     const specs = this.toolSpecs();
     if (this.catalogChars <= 0) return specs;
     const catalog = await this.catalogText(this.catalogChars);
     return specs.map((spec) => (spec.name === `${this.prefix}_call` ? { ...spec, description: withCatalog(spec.description, catalog) } : spec));
+  }
+
+  private async flatSpecs(): Promise<ToolSpec[]> {
+    const specs: ToolSpec[] = [];
+    for (const [name, ref] of await this.flatNames()) {
+      const { spec, kind } = await this.describe(ref.namespace, ref.name);
+      specs.push(flatToolSpec(name, { ...spec, kind }));
+    }
+    return specs;
+  }
+
+  /** Flat tool name → operation. Built once; a clash after sanitising gets a numeric suffix. */
+  private async flatNames(): Promise<Map<string, OperationRef>> {
+    if (this.flatIndex) return this.flatIndex;
+    const index = new Map<string, OperationRef>();
+    for (const ns of await this.services()) {
+      for (const op of await this.operations(ns.name)) {
+        const ref = { namespace: ns.name, name: op.name };
+        let name = flatToolName(ref);
+        for (let n = 2; index.has(name); n++) name = `${flatToolName(ref).slice(0, 60)}_${n}`;
+        index.set(name, ref);
+      }
+    }
+    this.flatIndex = index;
+    return index;
   }
 
   /** One line per namespace: `namespace: op — summary; op — summary`, cut at `maxChars` with a pointer to the list tool. */
@@ -241,9 +310,14 @@ export class OneTool {
     return lines.join("\n");
   }
 
-  /** Route a tool invocation by name. Adapters register `toolSpecs()` and forward calls here. */
-  handleTool(name: string, args: unknown, ctx: CallContext = {}): Promise<ToolOutcome> {
-    return dispatchTool(this, name, args, ctx);
+  /** Route a tool invocation by name, generic or flat. Adapters register `tools()` and forward calls here. */
+  async handleTool(name: string, args: unknown, ctx: CallContext = {}): Promise<ToolOutcome> {
+    if (name.startsWith(`${this.prefix}_`)) return dispatchTool(this, name, args, ctx);
+    const ref = (await this.flatNames()).get(name);
+    if (!ref) return dispatchTool(this, name, args, ctx);
+    const input = isPlainObject(args) ? args : {};
+    const result = await this.call({ namespace: ref.namespace, operation: ref.name, input }, ctx);
+    return result.ok ? { isError: false, content: result.content } : { isError: true, content: { json: result } };
   }
 
   // ---- internals -----------------------------------------------------------------------

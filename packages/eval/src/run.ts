@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { runClaudeCode } from "./claude-code.js";
-import { flatCondition, onetoolCondition } from "./conditions.js";
+import { conditionFor } from "./conditions.js";
 import { runEpisode, type Condition, type Trace } from "./loop.js";
 import { BedrockDriver } from "./model.js";
 import type { Layout } from "./mcp-server.js";
@@ -81,9 +81,9 @@ function record({ task, condition, trial }: Cell, trace: Trace, extra: { inputTo
 }
 
 async function runBedrock(args: Args, task: Task, layout: Layout, trial: number): Promise<RunRecord> {
-  const world = buildWorld({ inlineCatalog: layout === "onetool-inline", padding: args.padding });
+  const world = buildWorld({ layout, padding: args.padding });
   const ctx = { confirm: async () => "approved" as const, meta: { trial } };
-  const condition: Condition = layout === "flat" ? await flatCondition(world.onetool, ctx) : await onetoolCondition(world.onetool, ctx);
+  const condition: Condition = await conditionFor(layout, world.onetool, ctx);
   const trace = await runEpisode({ driver: new BedrockDriver({ modelId: args.model }), system: SYSTEM, prompt: task.prompt, condition });
   return record({ task, condition: layout, trial }, trace, { inputTokens: trace.usage.input, outputTokens: trace.usage.output, costUsd: 0 });
 }

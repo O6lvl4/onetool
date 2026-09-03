@@ -34,9 +34,11 @@ const ORDERS = [
 
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 
+export type EvalLayout = "onetool" | "onetool-inline" | "flat";
+
 export interface WorldOptions {
-  /** Put the operation index into the call tool's description. */
-  inlineCatalog?: boolean;
+  /** `onetool`: four bare tools; `onetool-inline`: four tools with the catalog (the library default); `flat`: one tool per operation. */
+  layout?: EvalLayout;
   /** Add this many synthetic read operations in a third namespace, to see how each layout scales. */
   padding?: number;
 }
@@ -117,7 +119,8 @@ export function buildWorld(options: WorldOptions = {}): { onetool: OneTool; pets
     providers,
     title: "the pet store and its warehouse",
     policy: { deny: ["petstore:deletePet"], onNoConfirm: "deny" },
-    inlineCatalog: options.inlineCatalog ? { maxChars: 12000 } : false,
+    layout: options.layout === "flat" ? "flat" : "generic",
+    inlineCatalog: options.layout === "onetool-inline" ? { maxChars: 12000 } : false,
   });
   return { onetool, pets, deletions };
 }

@@ -1,4 +1,5 @@
-export { OneTool, type OneToolOptions, type DescribeResult, type ListedOperation } from "./onetool.js";
+export { OneTool, type OneToolOptions, type DescribeResult, type ListedOperation, type ResolvedTools } from "./onetool.js";
+export { flatToolName, flatToolSpec } from "./flat.js";
 export { ResolveError } from "./resolve.js";
 export { buildToolSpecs, dispatchTool, toStructured } from "./tools.js";
 export { Policy, normalizeName, type PolicyConfig, type Decision } from "./policy.js";
@@ -14,6 +15,7 @@ export {
   type CallRequest,
   type CallResult,
   type CallStage,
+  type ConfirmDecision,
   type ConfirmFn,
   type ConfirmOutcome,
   type ConfirmRequest,
@@ -21,6 +23,7 @@ export {
   type ExecuteContext,
   type JsonSchema,
   type Kind,
+  type Layout,
   type NamespaceInfo,
   type OperationRef,
   type OperationSpec,

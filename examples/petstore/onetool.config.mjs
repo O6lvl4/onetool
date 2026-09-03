@@ -46,5 +46,7 @@ export default {
   providers: [petstore],
   title: "the demo pet store",
   prefix: "petstore",
+  // Four operations would get the flat layout under "auto"; this example exists to show the four generic tools.
+  layout: "generic",
   policy: { deny: ["petstore:delete*"] },
 };

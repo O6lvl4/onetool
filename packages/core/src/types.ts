@@ -74,12 +74,17 @@ export interface ConfirmRequest {
   verdictReason: string;
   summary: string;
   input: Record<string, unknown>;
+  /** The operation's input schema, so a consent UI can offer the fields for editing. */
+  inputSchema: JsonSchema;
 }
 
 export type ConfirmOutcome = "approved" | "declined" | "unavailable";
 
+/** Approval may carry an edited input; it is validated again before the call runs. */
+export type ConfirmDecision = ConfirmOutcome | { approved: true; input: Record<string, unknown> };
+
 /** The consent port. An adapter decides how a human is asked (MCP elicitation, a terminal prompt, a chat button). */
-export type ConfirmFn = (req: ConfirmRequest) => Promise<ConfirmOutcome>;
+export type ConfirmFn = (req: ConfirmRequest) => Promise<ConfirmDecision>;
 
 export interface CallContext {
   confirm?: ConfirmFn;
@@ -112,6 +117,9 @@ export type CallResult =
       candidates?: string[];
       details?: unknown;
     };
+
+/** How operations are presented to the model. See the README's evidence section for the measurements behind `auto`. */
+export type Layout = "generic" | "flat" | "auto";
 
 export interface ToolAnnotations {
   readOnly: boolean;

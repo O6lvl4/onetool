@@ -142,21 +142,66 @@ describe("OneTool.call", () => {
 
 describe("OneTool inline catalog", () => {
   it("appends a bounded operation index to the call tool by default, and not when disabled", async () => {
-    const plain = new OneTool({ providers: [petstore()], inlineCatalog: false });
-    expect((await plain.toolSpecsWithCatalog())[3]?.description).not.toContain("Operations (");
-    const inline = new OneTool({ providers: [petstore()] });
-    const call = (await inline.toolSpecsWithCatalog())[3]?.description ?? "";
+    const plain = new OneTool({ providers: [petstore()], layout: "generic", inlineCatalog: false });
+    expect((await plain.tools()).specs[3]?.description).not.toContain("Operations (");
+    const inline = new OneTool({ providers: [petstore()], layout: "generic" });
+    const call = (await inline.tools()).specs[3]?.description ?? "";
     expect(call).toContain("petstore: listPets — List pets; getPet — Get one pet;");
     expect(call).toContain("Call directly when you know the operation");
-    expect((await inline.toolSpecsWithCatalog())[2]?.description).not.toContain("Operations (");
+    expect((await inline.tools()).specs[2]?.description).not.toContain("Operations (");
     const tiny = new OneTool({ providers: [petstore()], inlineCatalog: { maxChars: 10 } });
     expect(await tiny.catalogText(10)).toBe("(7 more operations; use api_operations to list them)");
   });
 });
 
+describe("OneTool layouts", () => {
+  it("chooses flat for small catalogs and generic above the threshold", async () => {
+    const auto = new OneTool({ providers: [petstore()] });
+    const flat = await auto.tools();
+    expect(flat.layout).toBe("flat");
+    expect(flat.specs.map((t) => t.name)).toEqual(["petstore__listPets", "petstore__getPet", "petstore__createPet", "petstore__deletePet", "petstore__rejectPet", "petstore__failPet", "petstore__hugePet"]);
+    expect(flat.specs[1]).toMatchObject({ description: "Get one pet", inputSchema: { required: ["id"] }, annotations: { readOnly: true, destructive: false } });
+    expect(flat.specs[2]?.annotations).toMatchObject({ readOnly: false, destructive: true });
+    const generic = await new OneTool({ providers: [petstore()], autoThreshold: 3 }).tools();
+    expect(generic.layout).toBe("generic");
+    expect(generic.specs.map((t) => t.name)).toEqual(["api_services", "api_operations", "api_describe", "api_call"]);
+  });
+
+  it("routes flat tool names through the same policy and consent", async () => {
+    const calls: string[] = [];
+    const tool = new OneTool({ providers: [petstore(calls)], layout: "flat" });
+    expect(await tool.handleTool("petstore__getPet", { id: 1 })).toMatchObject({ isError: false, content: { json: { name: "Rex" } } });
+    expect(await tool.handleTool("petstore__createPet", { name: "Tom" })).toMatchObject({ isError: true, content: { json: { stage: "confirm" } } });
+    expect(await tool.handleTool("petstore__createPet", { name: "Tom" }, { confirm: approve })).toMatchObject({ isError: false });
+    expect(await tool.handleTool("petstore__getPet", { id: "x" })).toMatchObject({ isError: true, content: { json: { stage: "validate" } } });
+    expect(await tool.handleTool("api_services", {})).toMatchObject({ isError: false });
+    expect(calls).toEqual(["getPet", "createPet"]);
+  });
+});
+
+describe("OneTool consent with edited input", () => {
+  it("runs with the edited input when it validates, and rejects it otherwise", async () => {
+    const calls: string[] = [];
+    const tool = new OneTool({ providers: [petstore(calls)] });
+    const edited = await tool.call({ operation: "createPet", input: { name: "Tom" } }, { confirm: async (req) => ({ approved: true, input: { ...req.input, name: "Tim" } }) });
+    expect(edited).toMatchObject({ ok: true, content: { json: { id: 2, name: "Tim" } } });
+    const bad = await tool.call({ operation: "createPet", input: { name: "Tom" } }, { confirm: async () => ({ approved: true, input: { name: 3 } }) });
+    expect(bad).toMatchObject({ ok: false, stage: "validate" });
+    expect(bad.ok === false && bad.error).toContain("edited input rejected");
+    expect(calls).toEqual(["createPet"]);
+  });
+
+  it("hands the consent port the input schema", async () => {
+    const tool = new OneTool({ providers: [petstore()] });
+    let seen: unknown;
+    await tool.call({ operation: "createPet", input: { name: "Tom" } }, { confirm: async (req) => ((seen = req.inputSchema), "declined") });
+    expect(seen).toMatchObject({ required: ["name"] });
+  });
+});
+
 describe("OneTool tool surface", () => {
   it("names tools by prefix and routes handleTool", async () => {
-    const tool = new OneTool({ providers: [petstore()], prefix: "shop" });
+    const tool = new OneTool({ providers: [petstore()], prefix: "shop", layout: "generic" });
     expect(tool.toolSpecs().map((t) => t.name)).toEqual(["shop_services", "shop_operations", "shop_describe", "shop_call"]);
     expect(tool.toolSpecs()[3]?.annotations).toEqual({ readOnly: false, destructive: true, idempotent: false, openWorld: true });
     expect(tool.toolSpecs().map((t) => t.outputSchema !== undefined)).toEqual([true, true, true, false]);
